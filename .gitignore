@@ -5,3 +5,4 @@ __pycache__/
 *.pyd
 .DS_Store
 *.swp
+*.zip
