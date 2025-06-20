@@ -40,7 +40,7 @@ python3 NBTrackr.py
 - The notification will not appear if Ninjabrain Bot has no calculations.
 - The notification appears on top of your Minecraft window.
 - Shows whether you have a red or green boat:
-  - If you have a blue boat, no notification will be shown.
+  - If you have blue boat, no notification will be shown.
   - It does not show red boat if you are in the nether.
 
 ![image](https://github.com/user-attachments/assets/e8afa63d-fc1e-4f1c-b9c3-bdc33462c6d4)
