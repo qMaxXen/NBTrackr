@@ -10,10 +10,10 @@ A Python script that displays Ninjabrain Bot info using desktop notifications (L
 
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v1.0.0) section of this repository and download **NBTrackr-v1.0.0.tar.xz**.
-3. Move the downloaded **NBTrackr-v1.0.0.tar.xz** file to a convenient folder, then extract it using the terminal with the following command:
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v1.0.1) section of this repository and download **NBTrackr-v1.0.1.tar.xz**.
+3. Move the downloaded **NBTrackr-v1.0.1.tar.xz** file to a convenient folder, then extract it using the terminal with the following command:
 ```bash
-tar -xf NBTrackr-v1.0.0.tar.xz
+tar -xf NBTrackr-v1.0.1.tar.xz
 ```
 > [!NOTE]
 > Make sure you have **Python 3** installed.
@@ -24,7 +24,7 @@ tar -xf NBTrackr-v1.0.0.tar.xz
 > If it’s not installed, use your Linux distribution’s package manager to install it.
 4. You have to install the required Python packages to run NBTrackr with the following command:
 ```bash
-cd NBTrackr-v1.0.0
+cd NBTrackr-v1.0.1
 pip3 install -r requirements.txt
 ```
 5. Now run the script with the following command:
@@ -40,8 +40,7 @@ python3 NBTrackr.py
 - The notification will not appear if Ninjabrain Bot has no calculations.
 - The notification appears on top of your Minecraft window.
 - Shows whether you have a red or green boat:
-  - If you have blue boat, no notification will be shown.
-  - It does not show red boat if you are in the nether.
+  - It will only show red or green boat for 10 seconds. 
 
 ![image](https://github.com/user-attachments/assets/e8afa63d-fc1e-4f1c-b9c3-bdc33462c6d4)
 ![image](https://github.com/user-attachments/assets/f20d5543-ca3b-4fef-9510-b5b285e5bf62)
