@@ -40,6 +40,9 @@ def install_dunst_if_missing():
             print(Fore.RED + "No supported package manager found. Please install dunst manually.")
             print(Style.RESET_ALL)
             sys.exit(1)
+
+        print(Fore.YELLOW + "\n[!] Dunst has been installed. Please run this script again.\n" + Style.RESET_ALL)
+        sys.exit(0) 
     else:
         print(Fore.GREEN + "Dunst is already installed.")
         print(Style.RESET_ALL)
