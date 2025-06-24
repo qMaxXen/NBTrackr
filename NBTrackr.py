@@ -76,6 +76,28 @@ def stop_dunst(proc):
         except subprocess.TimeoutExpired:
             proc.kill()
 
+def init_dbus_notify_iface(retries=3, delay=1):
+    bus = dbus.SessionBus()
+    for attempt in range(1, retries + 1):
+        try:
+            notify_service = bus.get_object(
+                'org.freedesktop.Notifications',
+                '/org/freedesktop/Notifications'
+            )
+            notify_iface = dbus.Interface(
+                notify_service,
+                'org.freedesktop.Notifications'
+            )
+            return notify_iface
+        except dbus.exceptions.DBusException as e:
+            print(Fore.YELLOW + f"[!] DBus notifications not ready (attempt {attempt}/{retries}). Retrying in {delay} second(s)...")
+            print(Style.RESET_ALL)
+            time.sleep(delay)
+    print(Fore.RED + "Failed to connect to DBus notification service after installing and launching dunst.")
+    print("Please run the script again.")
+    print(Style.RESET_ALL)
+    sys.exit(1)
+
 install_dunst_if_missing()
 daemons_found = detect_running_notification_daemon()
 if daemons_found:
@@ -103,15 +125,7 @@ STRONGHOLD_API_URL = "http://localhost:52533/api/v1/stronghold"
 
 _notification_id = 0
 
-bus = dbus.SessionBus()
-notify_service = bus.get_object(
-    'org.freedesktop.Notifications',
-    '/org/freedesktop/Notifications'
-)
-notify_iface = dbus.Interface(
-    notify_service,
-    'org.freedesktop.Notifications'
-)
+notify_iface = init_dbus_notify_iface()
 
 def close_notification():
     global _notification_id
@@ -238,87 +252,28 @@ if __name__ == "__main__":
                         print("Stronghold FAILED, showing error message instead of green boat.")
                     else:
                         if boat_state != last_boat_state_notified:
-                            notify("NBTrackr", boat_state, "normal", timeout=10_000)
+                            notify("NBTrackr", boat_state, "normal", 3000)
                             last_boat_state_notified = boat_state
-                            print("Showing GREEN BOAT (no info) once for 10 seconds.")
-                elif boat_state == "RED BOAT":
-                    current_time = time.time()
-                    if last_boat_state_notified != "RED BOAT":
-                        notify("NBTrackr", boat_state, "critical", timeout=10_000)
-                        last_boat_state_notified = "RED BOAT"
-                        last_red_boat_notify_time = current_time
-                        last_red_boat_angle = h_ang
-                        print("Showing RED BOAT (no info) once for 10 seconds.")
-                    else:
-                        if current_time - last_red_boat_notify_time >= RED_BOAT_NOTIFY_DURATION:
-                            if h_ang is not None and last_red_boat_angle is not None:
-                                angle_diff = abs((h_ang - last_red_boat_angle + 180) % 360 - 180)
-                                if angle_diff > 0.1:
-                                    notify("NBTrackr", boat_state, "critical", timeout=10_000)
-                                    last_red_boat_notify_time = current_time
-                                    last_red_boat_angle = h_ang
-                                    print(f"Angle changed by {angle_diff:.2f}°, showing RED BOAT again for 10 seconds.")
-                                else:
-                                    print(f"Angle did not change (diff {angle_diff:.2f}°), no new RED BOAT notification.")
-                            else:
-                                notify("NBTrackr", boat_state, "critical", timeout=10_000)
-                                last_red_boat_notify_time = current_time
-                                last_red_boat_angle = h_ang
-                                print("Angle unknown, showing RED BOAT again for 10 seconds.")
-                        else:
-                            print("RED BOAT notification active, waiting before showing again.")
-                time.sleep(0.2)
-                continue
-
-            last_boat_state_notified = None
-            last_red_boat_angle = None
-            last_red_boat_notify_time = 0
-
-            if result_type == "FAILED":
-                lines = [
-                    boat_state,
-                    "Could not determine the stronghold chunk."
-                ]
-                notify("NBTrackr", "\n".join(lines), "critical")
-                last_boat_state_notified = boat_state
-                print("Stronghold FAILED, showing error message.")
-                time.sleep(0.2)
-                continue
-
-            dist_str, x_str, z_str = format_stronghold_data(dist, cert, cx, cz, in_nether)
-            urgency = "critical" if boat_state == "RED BOAT" else "normal"
-
-            angle_info = ""
-            if None not in (h_ang, px, pz, cx, cz):
-                sx = cx * 16 + 4; sz = cz * 16 + 4
-                if in_nether:
-                    sx /= 8; sz /= 8; px /= 8; pz /= 8
-                dx = sx - px; dz = sz - pz
-                tgt = (math.degrees(math.atan2(dz, dx)) + 270) % 360
-                current = h_ang % 360
-                signed_target = ((tgt + 180) % 360) - 180
-                turn = round(((tgt - current + 180) % 360) - 180)
-                print(f"Angle Of player: {round(((current + 180) % 360) - 180, 2)}°")
-                print(f"Stronghold Angle: {round(signed_target, 2)}°")
-                print(f"Adjust Angle: {turn}°")
-                if turn > 0:
-                    dir_sym = "-->"; print("Go right")
-                elif turn < 0:
-                    dir_sym = "<--"; print("Go left")
                 else:
-                    dir_sym = ""; print("You are aligned")
-                angle_info = (
-                    f"Stronghold Angle: {round(signed_target)}°\n"
-                    f"Adjust Angle: {dir_sym} {abs(turn)}°"
-                )
+                    close_notification()
+                time.sleep(0.2)
+                continue
 
-            lines = [boat_state]
-            if dist is not None:
-                lines += [dist_str, x_str, z_str]
-            if angle_info:
-                lines.append(angle_info)
+            dist_text, x_text, z_text = format_stronghold_data(dist, cert, cx, cz, in_nether)
 
-            notify("NBTrackr", "\n".join(lines), urgency)
+            if boat_state == "RED BOAT":
+                current_time = time.time()
+                if (last_red_boat_angle is None or
+                    abs(h_ang - last_red_boat_angle) > 15 or
+                    (current_time - last_red_boat_notify_time) > RED_BOAT_NOTIFY_DURATION):
+                    msg = f"Stronghold chunk: {x_text}, {z_text}\nCertainty: {math.ceil(cert * 100)}%\nDistance: {dist_text}"
+                    notify("NBTrackr - Red Boat", msg, "critical")
+                    last_red_boat_notify_time = current_time
+                    last_red_boat_angle = h_ang
+                else:
+                    print("Skipping Red Boat notify: angle change or timer not reached")
+            else:
+                notify("NBTrackr", f"Stronghold chunk: {x_text}, {z_text}\nCertainty: {math.ceil(cert * 100)}%\nDistance: {dist_text}")
+
             last_boat_state_notified = boat_state
-            print("-" * 30)
             time.sleep(0.2)
