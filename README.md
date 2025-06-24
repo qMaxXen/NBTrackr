@@ -8,6 +8,10 @@ A Python script that displays Ninjabrain Bot info using desktop notifications (L
 
 ## Installation
 
+> [!WARNING]
+> You need to use the **dunst notification daemon** to ensure the notifications work as intended. I am currently working on a script that automates this.
+
+
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
 2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v1.0.1) section of this repository and download **NBTrackr-v1.0.1.tar.xz**.
