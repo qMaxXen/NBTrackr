@@ -1,8 +1,102 @@
 import time
 import math
 import requests
+import shutil
+import subprocess
+import signal
+import os
+import sys
 import dbus
 from concurrent.futures import ThreadPoolExecutor
+from colorama import Fore, Style
+
+# ---------------------- Notification Daemon Setup ----------------------
+
+KNOWN_DAEMONS = [
+    "xfce4-notifyd",
+    "mate-notification-daemon",
+    "mako",
+    "notify-osd",
+    "notification-daemon",
+    "swaync",
+    "snixembed",
+    "muffin",
+    "cinnamon",
+    "gala",
+]
+
+def install_dunst_if_missing():
+    print("[+] Checking if dunst is installed...")
+    if shutil.which("dunst") is None:
+        print("[!] Dunst not found. Attempting installation...")
+        if shutil.which("apt"):
+            subprocess.run(["sudo", "apt", "update"])
+            subprocess.run(["sudo", "apt", "install", "-y", "dunst"])
+        elif shutil.which("pacman"):
+            subprocess.run(["sudo", "pacman", "-Sy", "--noconfirm", "dunst"])
+        elif shutil.which("dnf"):
+            subprocess.run(["sudo", "dnf", "install", "-y", "dunst"])
+        else:
+            print(Fore.RED + "No supported package manager found. Please install dunst manually.")
+            print(Style.RESET_ALL)
+            sys.exit(1)
+    else:
+        print(Fore.GREEN + "Dunst is already installed.")
+        print(Style.RESET_ALL)
+
+def detect_running_notification_daemon():
+    running = []
+    for daemon in KNOWN_DAEMONS:
+        try:
+            subprocess.check_output(["pgrep", "-f", daemon], stderr=subprocess.DEVNULL)
+            running.append(daemon)
+        except subprocess.CalledProcessError:
+            continue
+    return running
+
+def kill_notification_daemon(daemons):
+    for daemon in daemons:
+        print(f"[+] Killing {daemon}...")
+        try:
+            subprocess.run(["pkill", "-f", daemon], check=True)
+        except subprocess.CalledProcessError:
+            print(Fore.RED + f"Failed to kill {daemon} — continuing anyway.")
+            print(Style.RESET_ALL)
+
+def launch_dunst():
+    print("[+] Launching dunst...")
+    return subprocess.Popen(["dunst"])
+
+def stop_dunst(proc):
+    if proc and proc.poll() is None:
+        print("[+] Stopping dunst...")
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+install_dunst_if_missing()
+daemons_found = detect_running_notification_daemon()
+if daemons_found:
+    print(f"Found active notification daemon(s): {', '.join(daemons_found)}")
+    kill_notification_daemon(daemons_found)
+else:
+    print(Fore.RED + "No known notification daemon is running.")
+    print(Style.RESET_ALL)
+
+dunst_process = launch_dunst()
+
+def on_exit(signum, frame):
+    stop_dunst(dunst_process)
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, on_exit)
+signal.signal(signal.SIGTERM, on_exit)
+
+print(Style.RESET_ALL)
+
+# -----------------------------------------------------------------------
 
 BOAT_API_URL       = "http://localhost:52533/api/v1/boat"
 STRONGHOLD_API_URL = "http://localhost:52533/api/v1/stronghold"
@@ -34,6 +128,9 @@ def get_boat_state():
         return r.json().get("boatState", "UNKNOWN")
     except requests.RequestException as e:
         print(f"[Boat API Error] {e}")
+        if "Connection refused" in str(e):
+            print(Fore.RED + "ERROR: Ninjabrain Bot is not open OR API is not enabled in Ninjabrain Bot.")
+            print(Style.RESET_ALL)
         return "UNKNOWN"
 
 def get_stronghold_data():
@@ -56,6 +153,9 @@ def get_stronghold_data():
         )
     except requests.RequestException as e:
         print(f"[Stronghold API Error] {e}")
+        if "Connection refused" in str(e):
+            print(Fore.RED + "ERROR: Ninjabrain Bot is not open OR API is not enabled in Ninjabrain Bot.")
+            print(Style.RESET_ALL)
         return (None,) * 9
 
 def print_boat_state(s):
