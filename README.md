@@ -9,7 +9,7 @@ A Python script that displays Ninjabrain Bot info using desktop notifications (L
 ## Installation
 
 > [!CAUTION]
-> This script requires the **dunst notification daemon** to display notifications correctly. It automatically checks if dunst is installed, and if not, installs and it, then disables your current notification daemon and starts dunst.
+> This script requires the **dunst notification daemon** to display notifications correctly. It automatically checks if dunst is installed, and if not, installs it, then disables your current notification daemon and starts dunst.
 
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
