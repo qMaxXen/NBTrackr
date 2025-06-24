@@ -8,9 +8,8 @@ A Python script that displays Ninjabrain Bot info using desktop notifications (L
 
 ## Installation
 
-> [!WARNING]
-> You need to use the **dunst notification daemon** to ensure the notifications work as intended. I am currently working on a script that automates this.
-
+> [!NOTE]
+> This script requires the **dunst notification daemon** to display notifications correctly. It will automatically check if dunst is installed, and if not, install and enable it for you.
 
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
@@ -19,7 +18,7 @@ A Python script that displays Ninjabrain Bot info using desktop notifications (L
 ```bash
 tar -xf NBTrackr-v1.0.1.tar.xz
 ```
-> [!NOTE]
+> [!IMPORTANT]
 > Make sure you have **Python 3** installed.
 > You can check by running:
 > ```bash
@@ -37,9 +36,6 @@ python3 NBTrackr.py
 ```
 
 ## Features
-
-> [!WARNING]
-> If you're using the default `green boat` (boat angle set to 0) in Ninjabrain Bot, the script might not work as intended. It's designed for default blue boat.
 
 - The notification will not appear if Ninjabrain Bot has no calculations.
 - The notification appears on top of your Minecraft window.
