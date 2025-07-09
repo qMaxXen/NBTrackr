@@ -25,7 +25,7 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > This is required for the overlay image to appear on your screen.
 > <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
 
-3. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.0) section of this repository and download your preferred version.
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.0) section of this repository and download your preferred version.
 - For desktop notifications, download `NBTrackr-Notif-v2.0.0.tar.xz`
 - For pinned image overlay, download `NBTrackr-imgpin-v2.0.0.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
