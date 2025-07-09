@@ -7,8 +7,8 @@ Python scripts that display Ninjabrain Bot info using notifications or pinned im
 
 ## Display Methods
 I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can choose whichever method you prefer.
-- To use desktop notifications, download `NBTrackr-Notif-v2.0.0.tar.xz`.
-- To use the pinned image overlay, download `NBTrackr-imgpin-v2.0.0.tar.xz`.
+- To use desktop notifications, download `NBTrackr-Notif-v2.0.1.tar.xz`.
+- To use the pinned image overlay, download `NBTrackr-imgpin-v2.0.1.tar.xz`.
 
 > You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
 
@@ -25,9 +25,9 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > This is required for the overlay image to appear on your screen.
 > <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
 
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.0) section of this repository and download your preferred version.
-- For desktop notifications, download `NBTrackr-Notif-v2.0.0.tar.xz`
-- For pinned image overlay, download `NBTrackr-imgpin-v2.0.0.tar.xz`
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.1) section of this repository and download your preferred version.
+- For desktop notifications, download `NBTrackr-Notif-v2.0.1.tar.xz`
+- For pinned image overlay, download `NBTrackr-imgpin-v2.0.1.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 ```bash
 tar -xf <filename>
@@ -81,6 +81,8 @@ python3 NBTrackr-imgpin.py
   - The red or green boat pinned image is shown for only 10 seconds.
   - If you have blue boat, no pinned image will be shown.
 - You can freely move the overlay.
+- The pinned image position gets saved and restored.
+  - Position data is saved in `~/.config/NBTrackr/settings.json`
 <img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="400"/>
 <img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
 <img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="400"/>
