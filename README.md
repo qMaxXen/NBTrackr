@@ -79,6 +79,7 @@ python3 NBTrackr-imgpin.py
 - Shows whether you have a red or green boat:
   - The red or green boat notification is shown for only 10 seconds.
   - If you have blue boat, no notification will be shown.
+- You can freely move the overlay.
 <img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="400"/>
 
 <img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
