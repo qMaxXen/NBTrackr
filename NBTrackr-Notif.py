@@ -10,6 +10,21 @@ import dbus
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style
 
+# Program Version
+
+APP_VERSION = "v2.0.0"
+
+def get_latest_github_release_version():
+    url = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("tag_name")
+    except Exception as e:
+        print(f"[Version Check Error] {e}")
+        return None
+
 # ---------------------- Notification Daemon Setup ----------------------
 
 KNOWN_DAEMONS = [
@@ -209,6 +224,25 @@ def format_stronghold_data(dist, cert, cx, cz, in_nether):
     return f"Distance: {d}", f"X: {x}", f"Z: {z}"
 
 if __name__ == "__main__":
+# --- Check for updates ---
+    print(f"NBTrackr version: {APP_VERSION}")
+
+    # Simulated version check function (replace with real check if needed)
+    def check_for_update(current_version):
+        latest_version = get_latest_github_release_version()
+        if latest_version and latest_version != current_version:
+            return latest_version
+        return None
+
+
+    latest = check_for_update(APP_VERSION)
+    if latest:
+        print(f"New release is available: {latest}")
+        print(Fore.RED + "You should update to the latest version!")
+        print(Style.RESET_ALL)
+        input("Press Enter to continue...\n\n")
+
+# --------- END ----
     last_boat_state_notified = None
     last_red_boat_notify_time = 0
     last_red_boat_angle = None

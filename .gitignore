@@ -8,3 +8,6 @@ __pycache__/
 *.zip
 NBTrackr-v*.tar.xz
 NBTrackr-*/
+NBTrackr-*.tar.xz
+update_version.py
+requirements.txt
