@@ -12,7 +12,7 @@ from colorama import Fore, Style
 
 # Program Version
 
-APP_VERSION = "v2.0.0"
+APP_VERSION = "v2.0.1"
 
 def get_latest_github_release_version():
     url = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
@@ -145,7 +145,6 @@ def get_boat_state():
         r.raise_for_status()
         return r.json().get("boatState", "UNKNOWN")
     except requests.RequestException as e:
-        print(f"[Boat API Error] {e}")
         if "Connection refused" in str(e):
             print(Fore.RED + "ERROR: Ninjabrain Bot is not open OR API is not enabled in Ninjabrain Bot.")
             print(Style.RESET_ALL)
@@ -170,10 +169,6 @@ def get_stronghold_data():
             pp.get("zInOverworld", None),
         )
     except requests.RequestException as e:
-        print(f"[Stronghold API Error] {e}")
-        if "Connection refused" in str(e):
-            print(Fore.RED + "ERROR: Ninjabrain Bot is not open OR API is not enabled in Ninjabrain Bot.")
-            print(Style.RESET_ALL)
         return (None,) * 9
 
 def print_boat_state(s):
@@ -227,7 +222,6 @@ if __name__ == "__main__":
 # --- Check for updates ---
     print(f"NBTrackr version: {APP_VERSION}")
 
-    # Simulated version check function (replace with real check if needed)
     def check_for_update(current_version):
         latest_version = get_latest_github_release_version()
         if latest_version and latest_version != current_version:
@@ -237,10 +231,12 @@ if __name__ == "__main__":
 
     latest = check_for_update(APP_VERSION)
     if latest:
-        print(f"New release is available: {latest}")
-        print(Fore.RED + "You should update to the latest version!")
-        print(Style.RESET_ALL)
-        input("Press Enter to continue...\n\n")
+        print(f"\n=== New Release Available! ===")
+        print(f"Version: {latest}")
+        print("You should update to the latest version!")
+        print("https://github.com/qMaxXen/NBTrackr/releases\n")
+        input("Press Enter to continue...")
+        print("==============================")
 
 # --------- END ----
     last_boat_state_notified = None
