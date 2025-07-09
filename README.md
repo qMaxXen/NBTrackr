@@ -81,9 +81,9 @@ python3 NBTrackr-imgpin.py
   - The red or green boat pinned image is shown for only 10 seconds.
   - If you have blue boat, no pinned image will be shown.
 - You can freely move the overlay.
-<img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="500"/>
-<img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="500"/>
-<img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="500"/>
+<img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="400"/>
+<img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
+<img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="400"/>
 
 
 
