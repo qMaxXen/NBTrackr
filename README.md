@@ -79,8 +79,8 @@ python3 NBTrackr-imgpin.py
 - The pinned image overlay will not appear if Ninjabrain Bot has no calculations.
 - The pinned image overlay appears on top of your Minecraft window.
 - Shows whether you have a red or green boat:
-  - The red or green boat notification is shown for only 10 seconds.
-  - If you have blue boat, no notification will be shown.
+  - The red or green boat pinned image is shown for only 10 seconds.
+  - If you have blue boat, no pinned image will be shown.
 - You can freely move the overlay.
 <img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="400"/>
 
