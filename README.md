@@ -19,20 +19,19 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.0) section of this repository and download your preferred version.
+
+> [!IMPORTANT]
+> If you're using the **pinned image overlay method**, you must also enable the **OBS Overlay** option in Ninjabrain Bot settings.  
+> This is required for the overlay image to appear on your screen.
+> <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
+
+3. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.0) section of this repository and download your preferred version.
 - For desktop notifications, download `NBTrackr-Notif-v2.0.0.tar.xz`
 - For pinned image overlay, download `NBTrackr-imgpin-v2.0.0.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 ```bash
 tar -xf <filename>
 ```
-> [!IMPORTANT]
-> Make sure you have **Python 3** installed.
-> You can check by running:
-> ```bash
-> python3 --version
-> ```
-> If it’s not installed, use your Linux distribution’s package manager to install it.
 4. You have to install the required Python packages to run NBTrackr with the following command:
 ```bash
 cd <extracted-folder>
@@ -82,11 +81,10 @@ python3 NBTrackr-imgpin.py
   - The red or green boat pinned image is shown for only 10 seconds.
   - If you have blue boat, no pinned image will be shown.
 - You can freely move the overlay.
-<img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="400"/>
+<img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="500"/>
+<img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="500"/>
+<img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="500"/>
 
-<img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
-
-<img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="400"/>
 
 
 ---
