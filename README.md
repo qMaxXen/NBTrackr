@@ -3,12 +3,12 @@
 > [!IMPORTANT]
 > This script works **only on Linux**.
 
-Python scripts that display Ninjabrain Bot info using notifications or pinned image overlays (Linux).  This is meant for people with a single monitor.
+Python scripts that display Ninjabrain Bot info using notifications or pinned image overlays (Linux).  This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
 
 ## Display Methods
-I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can choose whichever method you prefer.
-- To use desktop notifications, download `NBTrackr-Notif-v2.0.1.tar.xz`.
-- To use the pinned image overlay, download `NBTrackr-imgpin-v2.0.1.tar.xz`.
+I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer.
+- To use desktop notifications, download `NBTrackr-Notif-v2.1.0.tar.xz`.
+- To use the pinned image overlay, download `NBTrackr-imgpin-v2.1.0.tar.xz`.
 
 > You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
 
@@ -25,9 +25,9 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > This is required for the overlay image to appear on your screen.
 > <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
 
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.0.1) section of this repository and download your preferred version.
-- For desktop notifications, download `NBTrackr-Notif-v2.0.1.tar.xz`
-- For pinned image overlay, download `NBTrackr-imgpin-v2.0.1.tar.xz`
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.1.0) section of this repository and download your preferred version.
+- For desktop notifications, download `NBTrackr-Notif-v2.1.0.tar.xz`
+- For pinned image overlay, download `NBTrackr-imgpin-v2.1.0.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 ```bash
 tar -xf <filename>
@@ -75,6 +75,8 @@ python3 NBTrackr-imgpin.py
 
 ## Features: Pinned Image Overlay
 
+### Basic Pinned Image Overlay Features
+
 - The pinned image overlay will not appear if Ninjabrain Bot has no calculations.
 - The pinned image overlay appears on top of your Minecraft window.
 - Shows whether you have a red or green boat:
@@ -87,7 +89,17 @@ python3 NBTrackr-imgpin.py
 <img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
 <img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="400"/>
 
+### Customization: Custom pinned image overlay
 
+- Run the `Customizer-imgpin-v2.1.0.py` script to choose your overlay preferences.
+  - Customization settings are saved to `~/.config/NBTrackr/customizations.json`.
+- To display the overlay in-game, run the `NBTrackr-imgpin.py` script.
+
+<img src="https://github.com/user-attachments/assets/6f39bbb4-5204-4390-b13c-36384610ed05" width="300"/>
+
+> The GUI for `Customizer-imgpin-v2.1.0.py` is heavily inspired by the [Jingle-CalcOverlay-Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin) by **Marin774**.
+
+<img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
 
 ---
 
