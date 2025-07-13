@@ -95,7 +95,7 @@ python3 NBTrackr-imgpin.py
   - Customization settings are saved to `~/.config/NBTrackr/customizations.json`.
 - To display the overlay in-game, run the `NBTrackr-imgpin.py` script.
 
-<img src="https://github.com/user-attachments/assets/6f39bbb4-5204-4390-b13c-36384610ed05" width="300"/>
+<img src="https://github.com/user-attachments/assets/533b9391-67c2-449f-8482-90778207d5fc" width="300"/>
 
 > The GUI for `Customizer-imgpin-v2.1.0.py` is heavily inspired by the [Jingle-CalcOverlay-Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin) by **Marin774**.
 
