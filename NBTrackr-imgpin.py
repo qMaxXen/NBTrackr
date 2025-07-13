@@ -142,16 +142,22 @@ def generate_custom_pinned_image():
         root.withdraw()
         return
 
-    # pick a font
+    font_name = custom.get("font_name", "")
+    font_size = 18
     try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 18)
+        font = ImageFont.truetype(font_name, font_size)
+    except Exception:
+        try:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+    try:
         ascent, descent = font.getmetrics()
         line_h = ascent + descent + 6
-    except IOError:
-        font = ImageFont.load_default()
-        # measure default line height via textbbox
+    except Exception:
         dummy_bbox = ImageDraw.Draw(Image.new("RGBA",(1,1))).textbbox((0,0),"Ay",font=font)
         line_h = (dummy_bbox[3]-dummy_bbox[1]) + 4
+
 
     # canvas size
     max_width = 0
