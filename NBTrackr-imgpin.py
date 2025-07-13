@@ -12,8 +12,8 @@ import atexit
 
 # Program Version
 
-DEBUG_MODE = False  # Set to True to enable debug prints
-APP_VERSION = "v2.1.0"
+DEBUG_MODE = True  # Set to True to enable debug prints
+APP_VERSION = "v2.1.1"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -112,15 +112,14 @@ def generate_custom_pinned_image():
                 dx, dz = sx-px, sz-pz
                 tgt = (math.degrees(math.atan2(dz, dx)) + 270) % 360
                 signed = ((tgt+180)%360) - 180
-                turn   = round(((tgt - (h_ang%360) + 180) % 360) - 180)
+                turn = ((tgt - (h_ang % 360) + 180) % 360) - 180
                 # stronghold angle
-                parts.append(("text", str(round(signed))))
+                parts.append(("text", f"{signed:.2f}"))
                 # arrow + magnitude
                 if show_dir:
                     arrow = "->" if turn>0 else "<-"
                     parts.append(("text", arrow))
-                    parts.append(("angle_adjust", str(abs(turn))))
-
+                    parts.append(("angle_adjust", f"{abs(turn):.1f}"))
 
             elif key == "overworld_coords":
                 x, z = cx*16+4, cz*16+4
@@ -169,7 +168,7 @@ def generate_custom_pinned_image():
                 pct = float(txt.rstrip("%"))
                 fill = gradient_color(pct)
             elif kind == "angle_adjust":
-                mag = min(int(txt), 170)
+                mag = min(int(float(txt)), 170)
                 pct = 100 - (mag/170*100)
                 fill = gradient_color(pct)
             else:
