@@ -12,7 +12,7 @@ import atexit
 
 # Program Version
 
-DEBUG_MODE = False  # Set to True to enable debug prints
+DEBUG_MODE = True  # Set to True to enable debug prints
 APP_VERSION = "v2.1.0"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
@@ -291,7 +291,11 @@ if __name__ == "__main__":
 
 # --------------------- NBTrackr Pin Image --------------------------
 
-IMAGE_PATH = "/tmp/nb-overlay.png"
+IMAGE_PATH_DEFAULT = "/tmp/nb-overlay.png"
+IMAGE_PATH_CUSTOM  = "/tmp/imgpin-overlay.png"
+
+
+
 GREEN_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_green.png")
 RED_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_red.png")
 
@@ -320,6 +324,7 @@ status = {
 }
 
 USE_CUSTOM_PINNED_IMAGE = load_customizations()
+IMAGE_PATH = IMAGE_PATH_CUSTOM if USE_CUSTOM_PINNED_IMAGE else IMAGE_PATH_DEFAULT
 
 if USE_CUSTOM_PINNED_IMAGE:
     generate_custom_pinned_image()
