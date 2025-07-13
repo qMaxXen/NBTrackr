@@ -7,6 +7,8 @@ __pycache__/
 *.swp
 *.zip
 NBTrackr-v*.tar.xz
+NBTrackr-Notif-v*.tar.xz
+NBTrackr-imgpin-v*.tar.xz
 NBTrackr-*/
 requirements.txt
 versions/
