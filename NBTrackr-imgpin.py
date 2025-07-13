@@ -12,7 +12,7 @@ import atexit
 
 # Program Version
 
-DEBUG_MODE = True  # Set to True to enable debug prints
+DEBUG_MODE = False  # Set to True to enable debug prints
 APP_VERSION = "v2.1.1"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
