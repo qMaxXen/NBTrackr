@@ -7,8 +7,8 @@ Python scripts that display Ninjabrain Bot info using notifications or pinned im
 
 ## Display Methods
 I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer.
-- To use desktop notifications, download `NBTrackr-Notif-v2.1.0.tar.xz`.
-- To use the pinned image overlay, download `NBTrackr-imgpin-v2.1.0.tar.xz`.
+- To use desktop notifications, download `NBTrackr-Notif-v2.1.1.tar.xz`.
+- To use the pinned image overlay, download `NBTrackr-imgpin-v2.1.1.tar.xz`.
 
 > You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
 
@@ -25,9 +25,9 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > This is required for the overlay image to appear on your screen.
 > <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
 
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.1.0) section of this repository and download your preferred version.
-- For desktop notifications, download `NBTrackr-Notif-v2.1.0.tar.xz`
-- For pinned image overlay, download `NBTrackr-imgpin-v2.1.0.tar.xz`
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.1.1) section of this repository and download your preferred version.
+- For desktop notifications, download `NBTrackr-Notif-v2.1.1.tar.xz`
+- For pinned image overlay, download `NBTrackr-imgpin-v2.1.1.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 ```bash
 tar -xf <filename>
@@ -91,13 +91,13 @@ python3 NBTrackr-imgpin.py
 
 ### Customization: Custom pinned image overlay
 
-- Run the `Customizer-imgpin-v2.1.0.py` script to choose your overlay preferences.
+- Run the `Customizer-imgpin.py` script to choose your overlay preferences.
   - Customization settings are saved to `~/.config/NBTrackr/customizations.json`.
 - To display the overlay in-game, run the `NBTrackr-imgpin.py` script.
 
 <img src="https://github.com/user-attachments/assets/533b9391-67c2-449f-8482-90778207d5fc" width="300"/>
 
-> The GUI for `Customizer-imgpin-v2.1.0.py` is heavily inspired by the [Jingle-CalcOverlay-Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin) by **Marin774**.
+> The GUI for `Customizer-imgpin.py` is heavily inspired by the [Jingle-CalcOverlay-Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin) by **Marin774**.
 
 <img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
 
