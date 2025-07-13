@@ -102,9 +102,9 @@ def generate_custom_pinned_image():
                 parts.append(("text", str(v)))
 
             elif key == "certainty_percentage":
-                pct = round(cert * 100)
+                pct = round(cert * 100, 1)
                 parts.append(("certainty", f"{pct}%"))
-
+                
             elif key == "angle" and None not in (h_ang, px, pz, cx, cz):
                 sx, sz = cx*16+4, cz*16+4
                 if in_nether:
