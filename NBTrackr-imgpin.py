@@ -13,7 +13,7 @@ import atexit
 # Program Version
 
 DEBUG_MODE = False  # Set to True to enable debug prints
-APP_VERSION = "v2.1.1"
+APP_VERSION = "v2.1.2"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -22,10 +22,54 @@ CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
 
 position_set = False
 
+# --------------------- Cache --------------------------
+
+_last_custom = None
+_last_boat = None
+_last_stronghold = None
+
+# cache loaded font
+_font = None
+_font_name = None
+_font_size = 18
+
+def _load_font(name: str):
+    """Load truetype font once; fallback to DejaVu or default."""
+    global _font, _font_name
+    if name == _font_name and _font:
+        return _font
+    for fn in (name, "DejaVuSans-Bold.ttf"):
+        try:
+            _font = ImageFont.truetype(fn, _font_size)
+            _font_name = name
+            return _font
+        except Exception:
+            continue
+    _font = ImageFont.load_default()
+    _font_name = None
+    return _font
+
+def gradient_color(pct: float):
+    """pct: 0..100 → color from red→yellow→green."""
+    if pct <= 50:
+        t = pct / 50.0
+        return (255, int(255 * t), 0)
+    t = (pct - 50) / 50.0
+    return (
+        int(255 * (1 - t)),
+        int(255 * (1 - t) + 206 * t),
+        int(41 * t),
+    )
+
+
+# --------------------- Cache End --------------------------
+
+
 # --------------------- Generate custom pinned image --------------------------
 
 
 def generate_custom_pinned_image():
+    global _last_custom, _last_boat, _last_stronghold
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             custom = json.load(f)
@@ -35,27 +79,23 @@ def generate_custom_pinned_image():
 
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
 
-
-    # 1) check boat state
     try:
-        boat_state = requests.get(
-            "http://localhost:52533/api/v1/boat", timeout=2
-        ).json().get("boatState")
-        if boat_state in ("ERROR", "MEASURING") or boat_state is None:
-            root.withdraw()
-            return
-    except Exception as e:
-        log("Failed to fetch boat data:", e)
+        boat_resp = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
+        stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
+    except Exception:
         return
 
-    # 2) fetch stronghold
-    try:
-        data = requests.get(
-            "http://localhost:52533/api/v1/stronghold", timeout=2
-        ).json()
-    except Exception as e:
-        log("Failed to fetch stronghold data:", e)
+    if (custom == _last_custom
+        and boat_resp == _last_boat
+        and stronghold_resp == _last_stronghold):
         return
+
+    _last_custom = custom
+    _last_boat = boat_resp
+    _last_stronghold = stronghold_resp
+
+    boat_state = boat_resp.get("boatState")
+    data = stronghold_resp
 
     preds      = data.get("predictions", [])
     px         = data["playerPosition"].get("xInOverworld")
@@ -68,21 +108,6 @@ def generate_custom_pinned_image():
     enabled     = custom.get("text_enabled", {})
     show_dir    = custom.get("show_angle_direction", True)
 
-    def gradient_color(pct: float):
-        """
-        pct: 0..100
-        0 → red, 50 → yellow, 100 → green
-        """
-        if pct <= 50:
-            t = pct / 50.0
-            return (255, int(255 * t), 0)
-        else:
-            t = (pct - 50) / 50.0
-            return (
-                int(255 * (1 - t)),
-                int(255 * (1 - t) + 206 * t),
-                int(41 * t),
-            )
 
     # build lines of parts
     lines = []
@@ -399,14 +424,13 @@ def api_polling_thread():
                 status["showUntil"] = 0
                 status["lastAngle"] = None
 
-        time.sleep(0.2)
-
+        time.sleep(0.3)
 
 def custom_image_update_thread():
     while True:
         if USE_CUSTOM_PINNED_IMAGE:
             generate_custom_pinned_image()
-        time.sleep(0.2) 
+        time.sleep(0.3) 
 
 
 def image_loader_thread():
