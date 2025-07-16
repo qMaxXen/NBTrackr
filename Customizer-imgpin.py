@@ -12,6 +12,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "show_angle_direction": False,
     "show_coords_based_on_dimension": False,
     "show_boat_icon": False,
+    "show_error_message": False,
     "font_name": "Helvetica",
     "text_order": [
         "distance",
@@ -80,7 +81,7 @@ def main():
 
     root = tk.Tk()
     root.title("NBTrackr Customizer")
-    root.geometry("450x550")
+    root.geometry("450x590")
     root.resizable(False, False)
 
     tk.Label(root, text="Customize Pinned Image Overlay", font=("Helvetica", 14)).pack(pady=10)
@@ -124,6 +125,12 @@ def main():
     boat_var = tk.BooleanVar(value=custom.get("show_boat_icon", False))
     tk.Label(f_boat, text="Show green/red boat icon", anchor="w").pack(side="left")
     tk.Checkbutton(f_boat, variable=boat_var).pack(side="left", padx=5)
+
+    # Show Could‑not‑determine error
+    f_error = tk.Frame(container); f_error.pack(fill="x", pady=5)
+    error_var = tk.BooleanVar(value=custom.get("show_error_message", False))
+    tk.Label(f_error, text="Show “Could not determine” error", anchor="w").pack(side="left")
+    tk.Checkbutton(f_error, variable=error_var).pack(side="left", padx=5)
 
     # Appearance section
     tk.Label(container, text="Appearance:", font=("Helvetica", 12)).pack(pady=(15,5), anchor="w")
@@ -193,9 +200,11 @@ def main():
         ang_var_checkbox = f3.winfo_children()[1]  # The Checkbutton in f3
         dim_var_checkbox = f4.winfo_children()[1]  # The Checkbutton in f4
         boat_var_checkbox = f_boat.winfo_children()[1]
+        error_var_checkbox = f_error.winfo_children()[1]
         ang_var_checkbox.config(state=ang_cb_state)
         dim_var_checkbox.config(state=dim_cb_state)
         boat_var_checkbox.config(state=dim_cb_state)
+        error_var_checkbox.config(state="normal" if en else "disabled")
         for i,key in enumerate(order):
             btnL, btnR = buttons[key]
             state = "normal" if en and i>0 else "disabled"
@@ -214,6 +223,7 @@ def main():
             "show_angle_direction": ang_var.get(),
             "show_coords_based_on_dimension": dim_var.get(),
             "show_boat_icon": boat_var.get(),
+            "show_error_message": error_var.get(),
             "font_name": font_var.get(),
             "text_order": order,
             "text_enabled": {k: var.get() for k,var in check_vars.items()}
@@ -230,6 +240,7 @@ def main():
             ang_var.set(custom["show_angle_direction"])
             dim_var.set(custom["show_coords_based_on_dimension"])
             boat_var.set(custom["show_boat_icon"])
+            error_var.set(custom["show_error_message"])
             font_var.set(custom["font_name"])
             order[:] = custom["text_order"]
             for k,var in check_vars.items():
