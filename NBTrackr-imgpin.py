@@ -12,7 +12,7 @@ import atexit
 
 # Program Version
 
-DEBUG_MODE = False  # Set to True to enable debug prints
+DEBUG_MODE = True  # Set to True to enable debug prints
 APP_VERSION = "v2.1.2"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
@@ -49,18 +49,28 @@ def _load_font(name: str):
     _font_name = None
     return _font
 
+
 def gradient_color(pct: float):
-    """pct: 0..100 → color from red→yellow→green."""
+    """
+    pct: 0..100
+    0 → green, 50 → yellow, 100 → red.
+    """
     if pct <= 50:
         t = pct / 50.0
-        return (255, int(255 * t), 0)
+        red   = int(255 * t)
+        green = 255
+        return (red, green, 0)
     t = (pct - 50) / 50.0
-    return (
-        int(255 * (1 - t)),
-        int(255 * (1 - t) + 206 * t),
-        int(41 * t),
-    )
+    red   = 255
+    green = int(255 * (1 - t))
+    return (red, green, 0)
 
+def certainty_color(pct: float):
+    """
+    pct: 0..100
+    0 → red, 50 → yellow, 100 → green.
+    """
+    return gradient_color(100 - pct)
 
 # --------------------- Cache End --------------------------
 
@@ -70,6 +80,8 @@ def gradient_color(pct: float):
 
 def generate_custom_pinned_image():
     global _last_custom, _last_boat, _last_stronghold
+
+    # 1) load the customizations
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             custom = json.load(f)
@@ -77,43 +89,70 @@ def generate_custom_pinned_image():
         log("Failed to read customizations:", e)
         return
 
+    show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
 
+    # 2) fetch both endpoints
     try:
-        boat_resp = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
+        boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
         stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
     except Exception:
         return
 
-    if (custom == _last_custom
-        and boat_resp == _last_boat
-        and stronghold_resp == _last_stronghold):
+    boat_state  = boat_resp.get("boatState")
+    result_type = stronghold_resp.get("resultType")
+
+    # pull shared 10s window
+    with status_lock:
+        last_shown = status["lastShown"]
+        show_until = status["showUntil"]
+    now = time.time()
+
+    # ICON‑ONLY MODE
+    if show_boat_icon and result_type != "TRIANGULATION":
+        if boat_state == last_shown and now < show_until:
+            icon_file = "boat_green_icon.png" if boat_state == "VALID" else "boat_red_icon.png"
+            icon_path = os.path.join(os.path.dirname(__file__), "assets", icon_file)
+            try:
+                icon = Image.open(icon_path).convert("RGBA")
+                icon = icon.resize((64, 64), Image.LANCZOS)
+                tk_img = ImageTk.PhotoImage(icon)
+                label.config(image=tk_img)
+                label.image = tk_img
+                root.geometry("64x64")
+                root.deiconify()
+            except Exception as e:
+                log("Failed to load/process icon:", e)
+        else:
+            root.withdraw()
         return
 
-    _last_custom = custom
-    _last_boat = boat_resp
-    _last_stronghold = stronghold_resp
+    # CACHE GUARD
+    if (custom == _last_custom and
+        boat_resp == _last_boat and
+        stronghold_resp == _last_stronghold):
+        return
+    _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
 
-    boat_state = boat_resp.get("boatState")
-    data = stronghold_resp
-
-    preds      = data.get("predictions", [])
-    px         = data["playerPosition"].get("xInOverworld")
-    pz         = data["playerPosition"].get("zInOverworld")
-    h_ang      = data["playerPosition"].get("horizontalAngle")
-    in_nether  = data["playerPosition"].get("isInNether", False)
+    # pull fields for overlay
+    preds      = stronghold_resp.get("predictions", [])
+    player_pos = stronghold_resp.get("playerPosition", {})
+    player_x   = player_pos.get("xInOverworld")
+    player_z   = player_pos.get("zInOverworld")
+    h_ang      = player_pos.get("horizontalAngle")
+    in_nether  = player_pos.get("isInNether", False)
 
     shown_count = custom.get("shown_measurements", 5)
     order       = custom.get("text_order", [])
     enabled     = custom.get("text_enabled", {})
     show_dir    = custom.get("show_angle_direction", True)
 
-
-    # build lines of parts
+    # build lines
     lines = []
     for pred in preds[:shown_count]:
         cx, cz = pred.get("chunkX"), pred.get("chunkZ")
-        cert, dist = pred.get("certainty"), pred.get("overworldDistance")
+        cert   = pred.get("certainty")
+        dist   = pred.get("overworldDistance")
         if None in (cx, cz, cert, dist):
             continue
 
@@ -123,26 +162,37 @@ def generate_custom_pinned_image():
                 continue
 
             if key == "distance":
-                v = round(dist/8) if in_nether else round(dist)
-                parts.append(("text", str(v)))
+                d = dist/8 if in_nether else dist
+                parts.append(("text", str(round(d))))
 
             elif key == "certainty_percentage":
                 pct = round(cert * 100, 1)
                 parts.append(("certainty", f"{pct}%"))
-                
-            elif key == "angle" and None not in (h_ang, px, pz, cx, cz):
-                sx, sz = cx*16+4, cz*16+4
+
+            elif key == "angle" and None not in (h_ang, player_x, player_z):
+                # stronghold center
+                sx = cx*16 + 4
+                sz = cz*16 + 4
+
+                # compute scaled player coords locally
                 if in_nether:
-                    sx, sz, px, pz = sx/8, sz/8, px/8, pz/8
-                dx, dz = sx-px, sz-pz
-                tgt = (math.degrees(math.atan2(dz, dx)) + 270) % 360
-                signed = ((tgt+180)%360) - 180
-                turn = ((tgt - (h_ang % 360) + 180) % 360) - 180
-                # stronghold angle
+                    sx /= 8.0
+                    sz /= 8.0
+                    p_x = player_x / 8.0
+                    p_z = player_z / 8.0
+                else:
+                    p_x = player_x
+                    p_z = player_z
+
+                dx = sx - p_x
+                dz = sz - p_z
+                tgt    = (math.degrees(math.atan2(dz, dx)) + 270) % 360
+                signed = ((tgt + 180) % 360) - 180
+                turn   = ((tgt - (h_ang % 360) + 180) % 360) - 180
+
                 parts.append(("text", f"{signed:.2f}"))
-                # arrow + magnitude
                 if show_dir:
-                    arrow = "->" if turn>0 else "<-"
+                    arrow = "->" if turn > 0 else "<-"
                     parts.append(("text", arrow))
                     parts.append(("angle_adjust", f"{abs(turn):.1f}"))
 
@@ -167,69 +217,53 @@ def generate_custom_pinned_image():
         root.withdraw()
         return
 
+    # font & line height
     font_name = custom.get("font_name", "")
-    font_size = 18
     try:
-        font = ImageFont.truetype(font_name, font_size)
-    except Exception:
+        font = ImageFont.truetype(font_name, _font_size)
+    except:
         try:
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
-        except Exception:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", _font_size)
+        except:
             font = ImageFont.load_default()
-    try:
-        ascent, descent = font.getmetrics()
-        line_h = ascent + descent + 6
-    except Exception:
-        dummy_bbox = ImageDraw.Draw(Image.new("RGBA",(1,1))).textbbox((0,0),"Ay",font=font)
-        line_h = (dummy_bbox[3]-dummy_bbox[1]) + 4
+    ascent, descent = font.getmetrics()
+    line_h = ascent + descent + 6
 
-
-    # canvas size
-    max_width = 0
+    # render
+    max_w  = 0
     height = line_h * len(lines) + 10
-    img = Image.new("RGBA", (800, height), (255,255,255,255))  # start wide
-    draw = ImageDraw.Draw(img)
+    img    = Image.new("RGBA", (800, height), (255,255,255,255))
+    draw   = ImageDraw.Draw(img)
 
-    for row_idx, parts in enumerate(lines):
+    for row, parts in enumerate(lines):
         x = 10
-        y = 5 + row_idx * line_h
-        skip_space = False  
+        y = 5 + row * line_h
         for kind, txt in parts:
             if kind == "certainty":
-                pct = float(txt.rstrip("%"))
-                fill = gradient_color(pct)
+                pct  = float(txt.rstrip("%"))
+                fill = certainty_color(pct)
             elif kind == "angle_adjust":
-                mag = min(int(float(txt)), 170)
-                pct = 100 - (mag/170*100)
+                pct  = float(txt)
                 fill = gradient_color(pct)
             else:
                 fill = (0,0,0)
 
             draw.text((x, y), txt, font=font, fill=fill)
-
-            space_str = "   "  
-            if txt in ("->", "<-"):  
-                space_str = " "
-                skip_space = True
-
-            bbox = draw.textbbox((0, 0), txt + space_str, font=font)
-            w = bbox[2] - bbox[0]
+            spacer = " " if txt in ("->","<-") else "   "
+            w = draw.textbbox((0,0), txt+spacer, font=font)[2]
             x += w
-        # After finishing the line, track max width used
-        if x > max_width:
-            max_width = x
+        max_w = max(max_w, x)
 
-    # crop the image width to max_width + some padding (e.g., 10px)
-    cropped_img = img.crop((0, 0, int(max_width + 10), height))
-
-    # save and display cropped image
-    cropped_img.save(IMAGE_PATH)
-    log("Custom pinned image saved.")
-
-    tk_img = ImageTk.PhotoImage(cropped_img)
+    # crop & show
+    cropped = img.crop((0, 0, int(max_w+10), height))
+    cropped.save(IMAGE_PATH)
+    tk_img = ImageTk.PhotoImage(cropped)
     label.config(image=tk_img)
     label.image = tk_img
+    root.geometry(f"{cropped.width}x{cropped.height}")
     root.deiconify()
+
+
 
 
 
