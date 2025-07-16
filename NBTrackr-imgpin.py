@@ -50,27 +50,32 @@ def _load_font(name: str):
     return _font
 
 
-def gradient_color(pct: float):
+def gradient_color(angle: float):
     """
-    pct: 0..100
-    0 → green, 50 → yellow, 100 → red.
+    angle: 0..180 degrees
+    0° → green, 90° → yellow, 180° → red.
     """
-    if pct <= 50:
-        t = pct / 50.0
+    if angle <= 90:
+        t = angle / 90.0
         red   = int(255 * t)
         green = 255
         return (red, green, 0)
-    t = (pct - 50) / 50.0
+    t = (angle - 90) / 90.0
     red   = 255
     green = int(255 * (1 - t))
     return (red, green, 0)
+
+
 
 def certainty_color(pct: float):
     """
     pct: 0..100
     0 → red, 50 → yellow, 100 → green.
     """
-    return gradient_color(100 - pct)
+    # clamp just in case
+    pct = max(0.0, min(100.0, pct))
+    return gradient_color((100 - pct) * 1.8)
+
 
 # --------------------- Cache End --------------------------
 
