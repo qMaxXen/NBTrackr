@@ -10,9 +10,9 @@ from datetime import datetime
 import json
 import atexit
 
-# Program Version
-
 DEBUG_MODE = True  # Set to True to enable debug prints
+
+# Program Version
 APP_VERSION = "v2.1.2"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
@@ -28,7 +28,6 @@ _last_custom = None
 _last_boat = None
 _last_stronghold = None
 
-# cache loaded font
 _font = None
 _font_name = None
 _font_size = 18
@@ -72,7 +71,6 @@ def certainty_color(pct: float):
     pct: 0..100
     0 → red, 50 → yellow, 100 → green.
     """
-    # clamp just in case
     pct = max(0.0, min(100.0, pct))
     return gradient_color((100 - pct) * 1.8)
 
@@ -86,7 +84,6 @@ def certainty_color(pct: float):
 def generate_custom_pinned_image():
     global _last_custom, _last_boat, _last_stronghold
 
-    # 1) load the customizations
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             custom = json.load(f)
@@ -96,8 +93,8 @@ def generate_custom_pinned_image():
 
     show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
+    show_error_message = custom.get("show_error_message", False)
 
-    # 2) fetch both endpoints
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
         stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
@@ -107,13 +104,38 @@ def generate_custom_pinned_image():
     boat_state  = boat_resp.get("boatState")
     result_type = stronghold_resp.get("resultType")
 
-    # pull shared 10s window
+
+    if show_error_message and result_type == "FAILED":
+        _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
+        
+        text = "Could not determine the stronghold chunk."
+        font_name = custom.get("font_name", "")
+        try:
+            font = ImageFont.truetype(font_name, _font_size)
+        except:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", _font_size) if _load_font else ImageFont.load_default()
+
+        dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
+        bbox = dummy.textbbox((0,0), text, font=font)
+        text_w, text_h = bbox[2]-bbox[0], bbox[3]-bbox[1]
+
+        pad = 10
+        img = Image.new("RGBA", (text_w+2*pad, text_h+2*pad), (255,255,255,255))
+        draw = ImageDraw.Draw(img)
+        draw.text((pad, pad), text, font=font, fill=(0,0,0))
+
+        img.save(IMAGE_PATH)
+        tk_img = ImageTk.PhotoImage(img)
+        label.config(image=tk_img); label.image = tk_img
+        root.geometry(f"{img.width}x{img.height}")
+        root.deiconify()
+        return
+
     with status_lock:
         last_shown = status["lastShown"]
         show_until = status["showUntil"]
     now = time.time()
 
-    # ICON‑ONLY MODE
     if show_boat_icon and result_type != "TRIANGULATION":
         if boat_state == last_shown and now < show_until:
             icon_file = "boat_green_icon.png" if boat_state == "VALID" else "boat_red_icon.png"
@@ -132,14 +154,12 @@ def generate_custom_pinned_image():
             root.withdraw()
         return
 
-    # CACHE GUARD
     if (custom == _last_custom and
         boat_resp == _last_boat and
         stronghold_resp == _last_stronghold):
         return
     _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
 
-    # pull fields for overlay
     preds      = stronghold_resp.get("predictions", [])
     player_pos = stronghold_resp.get("playerPosition", {})
     player_x   = player_pos.get("xInOverworld")
@@ -152,7 +172,6 @@ def generate_custom_pinned_image():
     enabled     = custom.get("text_enabled", {})
     show_dir    = custom.get("show_angle_direction", True)
 
-    # build lines
     lines = []
     for pred in preds[:shown_count]:
         cx, cz = pred.get("chunkX"), pred.get("chunkZ")
@@ -175,11 +194,9 @@ def generate_custom_pinned_image():
                 parts.append(("certainty", f"{pct}%"))
 
             elif key == "angle" and None not in (h_ang, player_x, player_z):
-                # stronghold center
                 sx = cx*16 + 4
                 sz = cz*16 + 4
 
-                # compute scaled player coords locally
                 if in_nether:
                     sx /= 8.0
                     sz /= 8.0
@@ -222,7 +239,6 @@ def generate_custom_pinned_image():
         root.withdraw()
         return
 
-    # font & line height
     font_name = custom.get("font_name", "")
     try:
         font = ImageFont.truetype(font_name, _font_size)
@@ -234,7 +250,6 @@ def generate_custom_pinned_image():
     ascent, descent = font.getmetrics()
     line_h = ascent + descent + 6
 
-    # render
     max_w  = 0
     height = line_h * len(lines) + 10
     img    = Image.new("RGBA", (800, height), (255,255,255,255))
@@ -259,7 +274,6 @@ def generate_custom_pinned_image():
             x += w
         max_w = max(max_w, x)
 
-    # crop & show
     cropped = img.crop((0, 0, int(max_w+10), height))
     cropped.save(IMAGE_PATH)
     tk_img = ImageTk.PhotoImage(cropped)
