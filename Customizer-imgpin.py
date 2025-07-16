@@ -51,12 +51,10 @@ def load_customizations():
         with open(CUSTOM_PATH, "r") as f:
             data = json.load(f)
 
-            # Merge missing keys from default without overwriting existing keys
             for key, val in DEFAULT_CUSTOMIZATIONS.items():
                 if key not in data:
                     data[key] = val
                 else:
-                    # For nested dict (like text_enabled), merge keys as well
                     if isinstance(val, dict) and isinstance(data.get(key), dict):
                         for sub_key, sub_val in val.items():
                             if sub_key not in data[key]:
@@ -197,8 +195,8 @@ def main():
         cb_shown.config(state="readonly" if en else "disabled")
         ang_cb_state = "normal" if en else "disabled"
         dim_cb_state = "normal" if en else "disabled"
-        ang_var_checkbox = f3.winfo_children()[1]  # The Checkbutton in f3
-        dim_var_checkbox = f4.winfo_children()[1]  # The Checkbutton in f4
+        ang_var_checkbox = f3.winfo_children()[1] 
+        dim_var_checkbox = f4.winfo_children()[1]  
         boat_var_checkbox = f_boat.winfo_children()[1]
         error_var_checkbox = f_error.winfo_children()[1]
         ang_var_checkbox.config(state=ang_cb_state)
