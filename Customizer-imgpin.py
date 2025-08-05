@@ -79,7 +79,7 @@ def main():
 
     root = tk.Tk()
     root.title("NBTrackr Customizer")
-    root.geometry("450x590")
+    root.geometry("450x600")
     root.resizable(False, False)
 
     tk.Label(root, text="Customize Pinned Image Overlay", font=("Helvetica", 14)).pack(pady=10)
