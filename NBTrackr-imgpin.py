@@ -102,6 +102,8 @@ def generate_custom_pinned_image():
         return
 
     boat_state  = boat_resp.get("boatState")
+    boat_angle  = boat_resp.get("boatAngle", None)
+    
     result_type = stronghold_resp.get("resultType")
 
 
@@ -137,6 +139,10 @@ def generate_custom_pinned_image():
     now = time.time()
 
     if show_boat_icon and result_type != "TRIANGULATION":
+        if boat_state == "VALID" and boat_angle == 0:
+            root.withdraw()
+            return
+    
         if boat_state == last_shown and now < show_until:
             icon_file = "boat_green_icon.png" if boat_state == "VALID" else "boat_red_icon.png"
             icon_path = os.path.join(os.path.dirname(__file__), "assets", icon_file)
