@@ -16,7 +16,7 @@ import sys
 DEBUG_MODE = True  # Set to True to enable debug prints
 
 # Program Version
-APP_VERSION = "v2.1.1"
+APP_VERSION = "v2.1.3"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
