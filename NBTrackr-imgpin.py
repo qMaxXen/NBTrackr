@@ -10,10 +10,10 @@ from datetime import datetime
 import json
 import atexit
 
-DEBUG_MODE = False  # Set to True to enable debug prints
+DEBUG_MODE = True  # Set to True to enable debug prints
 
 # Program Version
-APP_VERSION = "v2.1.2"
+APP_VERSION = "v2.1.3"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
