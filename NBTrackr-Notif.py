@@ -7,6 +7,8 @@ import signal
 import os
 import sys
 import dbus
+import tempfile
+import tarfile
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style
 
@@ -22,8 +24,83 @@ def get_latest_github_release_version():
         data = response.json()
         return data.get("tag_name")
     except Exception as e:
+        if e.response.status_code == 403:
+            print("[Version Check] rate limit hit, skipping update check.")
+            return None
         print(f"[Version Check Error] {e}")
         return None
+
+# ---------------------- AUTO UPDATER ----------------------
+
+GITHUB_API = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
+
+def check_and_update(current_version):
+    try:
+        resp = requests.get(GITHUB_API, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        latest = data["tag_name"]
+
+        if latest == current_version:
+            return
+
+        asset_name = f"NBTrackr-Notif-{latest}.tar.xz"
+        folder_name = asset_name.replace(".tar.xz", "")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(script_dir)
+        folder_path = os.path.join(parent_dir, folder_name)
+
+        if os.path.exists(folder_path):
+            print(f"[Updater] Latest version ({latest}) is already downloaded.")
+            print(f"[Updater] Please navigate to the following folder to continue:")
+            print(f"    {folder_path}")
+            print("[Updater] Then run the script again from the new version.")
+            sys.exit(0)
+
+        download_url = next(
+            (a["browser_download_url"] for a in data["assets"]
+             if a["name"] == asset_name),
+            None
+        )
+        if not download_url:
+            print(f"[Updater] Couldn’t find asset {asset_name} in release {latest}.")
+            return
+
+        print(f"[Updater] Downloading {asset_name} …")
+        tmpdir = tempfile.mkdtemp()
+        archive_path = os.path.join(tmpdir, asset_name)
+        with requests.get(download_url, stream=True, timeout=10) as dl:
+            dl.raise_for_status()
+            with open(archive_path, "wb") as f:
+                for chunk in dl.iter_content(8192):
+                    f.write(chunk)
+
+        print(f"[Updater] Extracting to {parent_dir} …")
+        with tarfile.open(archive_path, "r:xz") as tar:
+            tar.extractall(
+                path=parent_dir,
+                filter=lambda tarinfo, memberpath: tarinfo
+            )
+
+        os.remove(archive_path)
+
+        body = data.get("body", "").strip()
+        if body:
+            print("\n[Updater] What's new:")
+            print("-" * 40)
+            print(body)
+            print("-" * 40)
+
+        print(f"\n[Updater] Update completed. New version extracted to:")
+        print(f"    {folder_path}")
+        print("[Updater] Please run the script from the new folder.")
+        sys.exit(0)
+
+    except Exception as e:
+        print(f"[Updater] Update failed: {e}")
+
+# ---------------------- AUTO UPDATER - END ----------------------
+
 
 # ---------------------- Notification Daemon Setup ----------------------
 
@@ -237,9 +314,15 @@ if __name__ == "__main__":
         print(f"\n=== New Release Available! ===")
         print(f"Version: {latest}")
         print("You should update to the latest version!")
-        print("https://github.com/qMaxXen/NBTrackr/releases\n")
-        input("Press Enter to continue...")
-        print("==============================")
+        print("1) Continue with the current version")
+        print("2) Automatically update to the latest version")
+        choice = input("Enter choice [1/2]: ").strip()
+        print()
+
+        if choice == "2":
+            check_and_update(APP_VERSION)
+        else:
+            print("Skipping update. Continuing with current version", APP_VERSION, "\n")
 
 # --------- END ----
     last_boat_state_notified = None
