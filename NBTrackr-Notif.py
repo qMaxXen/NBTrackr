@@ -12,7 +12,7 @@ from colorama import Fore, Style
 
 # Program Version
 
-APP_VERSION = "v2.1.2"
+APP_VERSION = "v2.1.3"
 
 def get_latest_github_release_version():
     url = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
@@ -143,12 +143,15 @@ def get_boat_state():
     try:
         r = requests.get(BOAT_API_URL, timeout=1)
         r.raise_for_status()
-        return r.json().get("boatState", "UNKNOWN")
+        data = r.json()
+        state = data.get("boatState", "UNKNOWN")
+        angle = data.get("boatAngle", 0)
+        return state, angle
     except requests.RequestException as e:
         if "Connection refused" in str(e):
             print(Fore.RED + "ERROR: Ninjabrain Bot is not open OR API is not enabled in Ninjabrain Bot.")
             print(Style.RESET_ALL)
-        return "UNKNOWN"
+        return "UNKNOWN", 0
 
 def get_stronghold_data():
     try:
@@ -249,8 +252,9 @@ if __name__ == "__main__":
             future_boat = executor.submit(get_boat_state)
             future_stronghold = executor.submit(get_stronghold_data)
 
-            boat_state = print_boat_state(future_boat.result())
-
+            raw_state, boat_angle = future_boat.result()
+            boat_state = print_boat_state(raw_state)
+            
             if boat_state == "BLUE BOAT":
                 print("Boat is blue, skipping notification…")
                 close_notification()
@@ -265,15 +269,19 @@ if __name__ == "__main__":
              in_nether, h_ang, px, pz) = future_stronghold.result()
 
             if result_type is None or None in (dist, cert, cx, cz):
+                if boat_angle == 0:
+                    close_notification()
                 if boat_state == "GREEN BOAT":
                     if result_type == "FAILED":
                         notify("NBTrackr", "Could not determine the stronghold chunk.", "critical")
                         print("Stronghold FAILED, showing error message instead of green boat.")
                     else:
-                        if boat_state != last_boat_state_notified:
+                        if boat_angle != 0 and boat_state != last_boat_state_notified:
                             notify("NBTrackr", boat_state, "normal", timeout=10_000)
                             last_boat_state_notified = boat_state
                             print("Showing GREEN BOAT (no info) once for 10 seconds.")
+                        else:
+                            print("Boat angle is 0°, skipping GREEN BOAT notification.")
                 elif boat_state == "RED BOAT":
                     current_time = time.time()
                     if last_boat_state_notified != "RED BOAT":
