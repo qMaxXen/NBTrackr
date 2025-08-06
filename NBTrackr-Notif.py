@@ -271,7 +271,7 @@ def notify(title, message, urgency='normal', timeout=0):
     urg = {'low': 0, 'normal': 1, 'critical': 2}[urgency]
     hints = {
         'urgency': dbus.Byte(urg),
-        'markup': Boolean(False)        #
+        'markup': Boolean(False)        
     }
     nid = notify_iface.Notify(
         "NBTrackr",

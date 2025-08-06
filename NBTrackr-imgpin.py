@@ -13,7 +13,7 @@ import tempfile
 import tarfile
 import sys
 
-DEBUG_MODE = True  # Set to True to enable debug prints
+DEBUG_MODE = False  # Set to True to enable debug prints
 
 # Program Version
 APP_VERSION = "v2.1.3"
