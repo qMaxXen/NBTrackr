@@ -7,6 +7,7 @@ import signal
 import os
 import sys
 import dbus
+from dbus import Boolean
 import tempfile
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
@@ -268,7 +269,10 @@ def print_boat_state(s):
 def notify(title, message, urgency='normal', timeout=0):
     global _notification_id
     urg = {'low': 0, 'normal': 1, 'critical': 2}[urgency]
-    hints = {'urgency': dbus.Byte(urg)}
+    hints = {
+        'urgency': dbus.Byte(urg),
+        'markup': Boolean(False)        #
+    }
     nid = notify_iface.Notify(
         "NBTrackr",
         dbus.UInt32(_notification_id),
