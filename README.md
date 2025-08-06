@@ -58,6 +58,7 @@ python3 NBTrackr-imgpin.py
 - Shows whether you have a red or green boat:
   - The red or green boat notification is shown for only 10 seconds.
   - If you have blue boat, no notification will be shown.
+  - If you're using `Green Boat` mode in Ninjabrain Bot, boat notifications will not be shown.
 
 ![image](https://github.com/user-attachments/assets/e8afa63d-fc1e-4f1c-b9c3-bdc33462c6d4)
 ![image](https://github.com/user-attachments/assets/f20d5543-ca3b-4fef-9510-b5b285e5bf62)
@@ -92,6 +93,10 @@ python3 NBTrackr-imgpin.py
 <img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
 <img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="400"/>
 
+
+> [!TIP]
+> I recommend using the [custom pinned image overlay](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#customization-custom-pinned-image-overlay), as the default one uses Ninjabrain Bot’s `nb-overlay.png`, which updates with a delay. The custom pinned image overlay uses the API directly, so it updates instantly with no delay.
+
 ### Customization: Custom pinned image overlay
 
 - Run the `Customizer-imgpin.py` script to choose your overlay preferences.
@@ -105,8 +110,5 @@ python3 NBTrackr-imgpin.py
 <img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
 
 ---
-
-> [!TIP]
-> - You should set a hotkey to reset Ninjabrain Bot calculations in Ninjabrain Bot > Settings > Hotkeys, by binding a key to Reset.
 
 If you need help or have any questions, feel free to contact me on Discord: **qMaxXen**.
