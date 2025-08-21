@@ -13,10 +13,10 @@ import tempfile
 import tarfile
 import sys
 
-DEBUG_MODE = False  # Set to True to enable debug prints
+DEBUG_MODE = True  # Set to True to enable debug prints
 
 # Program Version
-APP_VERSION = "v2.1.3"
+APP_VERSION = "v2.1.4"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -123,8 +123,8 @@ def generate_custom_pinned_image():
         img.save(IMAGE_PATH)
         tk_img = ImageTk.PhotoImage(img)
         label.config(image=tk_img); label.image = tk_img
-        root.geometry(f"{img.width}x{img.height}")
-        root.deiconify()
+        place_window(img.width, img.height)
+        show_window()
         return
 
     with status_lock:
@@ -134,7 +134,7 @@ def generate_custom_pinned_image():
 
     if show_boat_icon and result_type != "TRIANGULATION":
         if boat_state == "VALID" and boat_angle == 0:
-            root.withdraw()
+            hide_window()
             return
     
         if boat_state == last_shown and now < show_until:
@@ -146,12 +146,12 @@ def generate_custom_pinned_image():
                 tk_img = ImageTk.PhotoImage(icon)
                 label.config(image=tk_img)
                 label.image = tk_img
-                root.geometry("64x64")
-                root.deiconify()
+                place_window(64, 64)
+                show_window()
             except Exception as e:
                 log("Failed to load/process icon:", e)
         else:
-            root.withdraw()
+            hide_window()
         return
 
     if (custom == _last_custom and
@@ -236,7 +236,7 @@ def generate_custom_pinned_image():
             lines.append(parts)
 
     if not lines:
-        root.withdraw()
+        hide_window()
         return
 
     font_name = custom.get("font_name", "")
@@ -279,9 +279,8 @@ def generate_custom_pinned_image():
     tk_img = ImageTk.PhotoImage(cropped)
     label.config(image=tk_img)
     label.image = tk_img
-    root.geometry(f"{cropped.width}x{cropped.height}")
-    root.deiconify()
-
+    place_window(cropped.width, cropped.height)
+    show_window()
 
 
 
@@ -312,6 +311,7 @@ def check_for_update(current_version):
 def log(*args):
     if DEBUG_MODE:
         print(datetime.now().strftime("[%H:%M:%S]"), *args)
+
 
 # ---------------------- AUTO UPDATER ----------------------
 
@@ -373,6 +373,61 @@ def check_and_update(current_version):
         print(f"[Updater] Update failed: {e}")
 
 # ---------------------- AUTO UPDATER - END ----------------------
+
+# ---------------------- Helpers ----------------------
+
+def show_window():
+    try:
+        try:
+            root.attributes("-disabled", False)
+        except Exception:
+            pass
+        root.attributes("-alpha", 1.0)
+        root.update_idletasks()
+    except Exception:
+        root.deiconify()
+
+def hide_window():
+    try:
+        root.attributes("-alpha", 0.0)
+        try:
+            label.config(image=TRANSPARENT_TK)
+            label.image = TRANSPARENT_TK
+        except Exception:
+            pass
+        try:
+            root.geometry(f"1x1+0+0")
+        except Exception:
+            root.geometry("1x1+0+0")
+        root.update_idletasks()
+    except Exception:
+        try:
+            label.config(image=TRANSPARENT_TK)
+            label.image = TRANSPARENT_TK
+        except Exception:
+            pass
+        root.withdraw()
+
+def place_window(width, height):
+    try:
+        if saved_pos:
+            sx, sy = saved_pos
+            root.geometry(f"{int(width)}x{int(height)}+{int(sx)}+{int(sy)}")
+        else:
+            cur_x = root.winfo_x()
+            cur_y = root.winfo_y()
+            root.geometry(f"{int(width)}x{int(height)}+{cur_x}+{cur_y}")
+    except Exception:
+        try:
+            root.geometry(f"{int(width)}x{int(height)}+0+0")
+        except Exception:
+            pass
+
+
+
+
+
+# ---------------------- Helpers - END ----------------------
 
 # --------------------- Config load/save --------------------------
 
@@ -455,13 +510,24 @@ root = tk.Tk()
 root.overrideredirect(True)
 root.wm_attributes("-topmost", True)
 
+try:
+    root.attributes("-alpha", 0.0)
+except Exception:
+    root.withdraw()
+
 saved_pos = load_config()
 if saved_pos:
-    x, y = saved_pos
-    root.geometry(f"+{x}+{y}")
-
+    sx, sy = saved_pos
+    try:
+        root.geometry(f"+{sx}+{sy}")
+    except Exception:
+        pass
+    
 label = tk.Label(root, borderwidth=0, highlightthickness=0)
 label.pack()
+
+TRANSPARENT_IMG = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+TRANSPARENT_TK = ImageTk.PhotoImage(TRANSPARENT_IMG)
 
 image_queue = queue.Queue(maxsize=1)
 
@@ -647,23 +713,18 @@ def update_image():
         return
 
     if img is None:
-        root.withdraw()
+        hide_window()
     else:
         tk_img = ImageTk.PhotoImage(img)
         label.configure(image=tk_img)
         label.image = tk_img
 
-        if not position_set and saved_pos:
-            x, y = saved_pos
-            root.geometry(f"{img.width}x{img.height}+{x}+{y}")
-            position_set = True
-        else:
-            x = root.winfo_x()
-            y = root.winfo_y()
-            root.geometry(f"{img.width}x{img.height}+{x}+{y}")
+        place_window(img.width, img.height)
+        position_set = True
 
-        root.deiconify()
+        show_window()
 
+        
     root.after(100, update_image)
 
 
@@ -676,8 +737,11 @@ def on_motion(event):
     y = event.y_root - root._drag_start_y
     root.geometry(f"+{x}+{y}")
 
+
+
 def on_release(event):
     save_config()
+
 
 root.bind("<ButtonPress-1>", start_move)
 root.bind("<B1-Motion>", on_motion)
