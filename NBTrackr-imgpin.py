@@ -187,8 +187,8 @@ def generate_custom_pinned_image():
 
             if key == "distance":
                 d = dist/8 if in_nether else dist
-                parts.append(("text", str(round(d))))
-
+                parts.append(("distance", (str(round(d)), d)))
+                
             elif key == "certainty_percentage":
                 pct = round(cert * 100, 1)
                 parts.append(("certainty", f"{pct}%"))
@@ -258,21 +258,53 @@ def generate_custom_pinned_image():
     for row, parts in enumerate(lines):
         x = 10
         y = 5 + row * line_h
-        for kind, txt in parts:
+        for item in parts:
+            kind = item[0]
+            val = item[1]
+    
+            txt = ""
+            fill = (0, 0, 0)
+    
             if kind == "certainty":
-                pct  = float(txt.rstrip("%"))
-                fill = certainty_color(pct)
+                txt = val
+                try:
+                    pct = float(txt.rstrip("%"))
+                    fill = certainty_color(pct)
+                except Exception:
+                    fill = (0, 0, 0)
+    
             elif kind == "angle_adjust":
-                pct  = float(txt)
-                fill = gradient_color(pct)
+                txt = val
+                try:
+                    pct = float(val)
+                    fill = gradient_color(pct)
+                except Exception:
+                    fill = (0, 0, 0)
+    
+            elif kind == "distance":
+                try:
+                    txt, dval = val
+                except Exception:
+                    txt = str(val)
+                    dval = None
+    
+                if dval is not None and dval <= 192:
+                    fill = (255, 165, 0)  
+                else:
+                    fill = (0, 0, 0)
+    
             else:
-                fill = (0,0,0)
-
+                txt = str(val)
+                fill = (0, 0, 0)
+    
             draw.text((x, y), txt, font=font, fill=fill)
-            spacer = " " if txt in ("->","<-") else "   "
-            w = draw.textbbox((0,0), txt+spacer, font=font)[2]
+            spacer = " " if txt in ("->", "<-") else "   "
+            w = draw.textbbox((0, 0), txt + spacer, font=font)[2]
             x += w
+    
         max_w = max(max_w, x)
+    
+
 
     cropped = img.crop((0, 0, int(max_w+10), height))
     cropped.save(IMAGE_PATH)
