@@ -13,7 +13,7 @@ import tempfile
 import tarfile
 import sys
 
-DEBUG_MODE = True  # Set to True to enable debug prints
+DEBUG_MODE = False  # Set to True to enable debug prints
 
 # Program Version
 APP_VERSION = "v2.1.4"
@@ -288,7 +288,7 @@ def generate_custom_pinned_image():
                     txt = str(val)
                     dval = None
     
-                if dval is not None and dval <= 192:
+                if dval is not None and dval <= 193:
                     fill = (255, 165, 0)  
                 else:
                     fill = (0, 0, 0)
@@ -590,6 +590,15 @@ def is_image_nonempty(path):
     except Exception:
         return False
 
+def idle_update_frequency():
+    with status_lock:
+        result_type = status["resultType"]    
+    
+    
+    if result_type not in ("TRIANGULATION", "BLIND"):
+        return 1.0
+    return 0.3      
+
 def api_polling_thread():
     while True:
         try:
@@ -650,7 +659,7 @@ def custom_image_update_thread():
     while True:
         if USE_CUSTOM_PINNED_IMAGE:
             generate_custom_pinned_image()
-        time.sleep(0.3) 
+        time.sleep(idle_update_frequency())
 
 
 def image_loader_thread():
