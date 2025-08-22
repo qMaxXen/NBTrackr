@@ -13,7 +13,7 @@ import tempfile
 import tarfile
 import sys
 
-DEBUG_MODE = False  # Set to True to enable debug prints
+DEBUG_MODE = True  # Set to True to enable debug prints
 
 # Program Version
 APP_VERSION = "v2.1.4"
@@ -790,8 +790,6 @@ def on_release(event):
 root.bind("<ButtonPress-1>", start_move)
 root.bind("<B1-Motion>", on_motion)
 root.bind("<ButtonRelease-1>", on_release)
-
-atexit.register(save_config)
 
 root.after(100, update_image)
 
