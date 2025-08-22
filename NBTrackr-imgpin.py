@@ -282,17 +282,20 @@ def generate_custom_pinned_image():
                     fill = (0, 0, 0)
     
             elif kind == "distance":
-                try:
-                    txt, dval = val
-                except Exception:
-                    txt = str(val)
-                    dval = None
-    
-                if dval is not None and dval <= 193:
-                    fill = (255, 165, 0)  
-                else:
-                    fill = (0, 0, 0)
-    
+                    try:
+                        txt, dval = val
+                    except Exception:
+                        txt = str(val)
+                        dval = None
+                
+                    if in_nether:
+                        fill = (0, 0, 0)  # always black in Nether
+                    else:
+                        if dval is not None and dval <= 193:
+                            fill = (255, 165, 0)  # orange if close in OW
+                        else:
+                            fill = (0, 0, 0)
+                                
             else:
                 txt = str(val)
                 fill = (0, 0, 0)
