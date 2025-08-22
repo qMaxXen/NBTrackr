@@ -109,6 +109,13 @@ python3 NBTrackr-imgpin.py
 
 <img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
 
+
+### Known bugs
+
+- **NBTrackr-imgpin on Wayland:** Hovering over the pinned image overlay while Minecraft is the active window may freeze the screen.
+  - To unfreeze, switch to another workspace.
+  - Because of this, if you want to move the pinned image overlay, do so while Minecraft is not the focused window.
+
 ---
 
 If you need help or have any questions, feel free to contact me on Discord: **qMaxXen**.
