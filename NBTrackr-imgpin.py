@@ -442,8 +442,9 @@ def hide_window():
 
 def place_window(width, height):
     try:
-        if saved_pos:
-            sx, sy = saved_pos
+        pos = load_config()
+        if pos:
+            sx, sy = pos
             root.geometry(f"{int(width)}x{int(height)}+{int(sx)}+{int(sy)}")
         else:
             cur_x = root.winfo_x()
@@ -454,7 +455,6 @@ def place_window(width, height):
             root.geometry(f"{int(width)}x{int(height)}+0+0")
         except Exception:
             pass
-
 
 
 
