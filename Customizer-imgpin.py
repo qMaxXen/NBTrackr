@@ -2,7 +2,7 @@ import os
 import json
 import tkinter as tk
 import tkinter.font as tkFont
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, colorchooser
 
 CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 
@@ -14,6 +14,8 @@ DEFAULT_CUSTOMIZATIONS = {
     "show_boat_icon": False,
     "show_error_message": False,
     "font_name": "Helvetica",
+    "background_color": "#FFFFFF",
+    "text_color": "#000000",
     "text_order": [
         "distance",
         "certainty_percentage",
@@ -73,28 +75,43 @@ def swap_positions(lst, idx, direction):
     if 0 <= new_idx < len(lst):
         lst[idx], lst[new_idx] = lst[new_idx], lst[idx]
 
+def pick_color(var):
+    col = colorchooser.askcolor(title="Choose color")
+    if col and col[1]:
+        var.set(col[1])
+
+def is_valid_hex(s):
+    if not isinstance(s, str):
+        return False
+    if len(s) != 7 or not s.startswith("#"):
+        return False
+    try:
+        int(s[1:], 16)
+        return True
+    except ValueError:
+        return False
+
+
 def main():
     ensure_custom_file_exists()
     custom = load_customizations()
 
     root = tk.Tk()
     root.title("NBTrackr Customizer")
-    root.geometry("450x600")
+    root.geometry("450x685")
     root.resizable(False, False)
 
     tk.Label(root, text="Customize Pinned Image Overlay", font=("Helvetica", 14)).pack(pady=10)
     container = tk.Frame(root)
     container.pack(padx=10, fill="x")
 
-    # Use custom pinned image
     f1 = tk.Frame(container); f1.pack(fill="x", pady=5)
     use_var = tk.BooleanVar(value=custom.get("use_custom_pinned_image", False))
     tk.Label(f1, text="Use custom pinned image", anchor="w").pack(side="left")
     tk.Checkbutton(f1, variable=use_var).pack(side="left", padx=5)
 
-    # Shown measurements
     f2 = tk.Frame(container); f2.pack(fill="x", pady=5)
-    tk.Label(f2, text="Shown measurements:", width=18, anchor="w").pack(side="left")
+    tk.Label(f2, text="Shown measurements", width=18, anchor="w").pack(side="left")
     shown_var = tk.IntVar(value=custom.get("shown_measurements", 1))
     cb_shown = ttk.Combobox(f2, textvariable=shown_var, state="readonly", width=5)
     cb_shown['values'] = [1,2,3,4,5]
@@ -106,34 +123,29 @@ def main():
     cb_shown.bind("<<ComboboxSelected>>", clear_selection)
     
 
-    # Show angle direction
     f3 = tk.Frame(container); f3.pack(fill="x", pady=5)
     ang_var = tk.BooleanVar(value=custom.get("show_angle_direction", False))
     tk.Label(f3, text="Show angle direction (e.g. <- 24.3)", anchor="w").pack(side="left")
     tk.Checkbutton(f3, variable=ang_var).pack(side="left", padx=5)
 
-    # Show coords by dimension
     f4 = tk.Frame(container); f4.pack(fill="x", pady=5)
     dim_var = tk.BooleanVar(value=custom.get("show_coords_based_on_dimension", False))
     tk.Label(f4, text="Show Overworld/Nether coords based on dimension", anchor="w").pack(side="left")
     tk.Checkbutton(f4, variable=dim_var).pack(side="left", padx=5)
 
-    # Show boat icon toggle
     f_boat = tk.Frame(container); f_boat.pack(fill="x", pady=5)
     boat_var = tk.BooleanVar(value=custom.get("show_boat_icon", False))
     tk.Label(f_boat, text="Show green/red boat icon", anchor="w").pack(side="left")
     tk.Checkbutton(f_boat, variable=boat_var).pack(side="left", padx=5)
 
-    # Show Could‑not‑determine error
     f_error = tk.Frame(container); f_error.pack(fill="x", pady=5)
     error_var = tk.BooleanVar(value=custom.get("show_error_message", False))
     tk.Label(f_error, text="Show “Could not determine” error", anchor="w").pack(side="left")
     tk.Checkbutton(f_error, variable=error_var).pack(side="left", padx=5)
 
-    # Appearance section
     tk.Label(container, text="Appearance:", font=("Helvetica", 12)).pack(pady=(15,5), anchor="w")
     f5 = tk.Frame(container); f5.pack(fill="x", pady=5)
-    tk.Label(f5, text="Font:", width=12, anchor="w").pack(side="left")
+    tk.Label(f5, text="Font", width=12, anchor="w").pack(side="left")
     font_var = tk.StringVar(value=custom.get("font_name", DEFAULT_CUSTOMIZATIONS["font_name"]))
     all_fonts = sorted(tkFont.families())
     font_dropdown = ttk.Combobox(f5, textvariable=font_var, state="readonly")
@@ -141,7 +153,6 @@ def main():
     font_dropdown.pack(side="left", fill="x", expand=True)
 
     def clear_selection(event):
-        # Clear any selection/highlight in the combobox Entry widget
         event.widget.selection_clear()
 
     font_dropdown.bind("<<ComboboxSelected>>", clear_selection)
@@ -154,12 +165,30 @@ def main():
             font_dropdown.configure(font=("Helvetica", 10))
 
     font_var.trace_add("write", apply_font_dropdown)
-    root.after(100, apply_font_dropdown)  # Apply font after initialization
+    root.after(100, apply_font_dropdown)  
 
-    # Text Elements header
+    f_bg = tk.Frame(container)
+    f_bg.pack(fill="x", pady=(5,2))  
+    tk.Label(f_bg, text="Background color", width=18, anchor="w").pack(side="left")
+    bg_var = tk.StringVar(value=custom.get("background_color", DEFAULT_CUSTOMIZATIONS["background_color"]))
+    bg_entry = tk.Entry(f_bg, textvariable=bg_var, width=10)
+    bg_entry.pack(side="left", padx=5)
+    bg_choose_btn = tk.Button(f_bg, text="Choose", command=lambda: pick_color(bg_var))
+    bg_choose_btn.pack(side="left", padx=(0,10))
+
+    f_text = tk.Frame(container)
+    f_text.pack(fill="x", pady=(2,5))
+    tk.Label(f_text, text="Text color", width=18, anchor="w").pack(side="left")
+    text_var = tk.StringVar(value=custom.get("text_color", DEFAULT_CUSTOMIZATIONS["text_color"]))
+    text_entry = tk.Entry(f_text, textvariable=text_var, width=10)
+    text_entry.pack(side="left", padx=5)
+    text_choose_btn = tk.Button(f_text, text="Choose", command=lambda: pick_color(text_var))
+    text_choose_btn.pack(side="left")
+
+
+
     tk.Label(container, text="Text Elements:", font=("Helvetica", 12)).pack(pady=(15,5), anchor="w")
 
-    # Text order & enable/disable
     order = custom.get("text_order", DEFAULT_CUSTOMIZATIONS["text_order"].copy())
     enabled = custom.get("text_enabled", DEFAULT_CUSTOMIZATIONS["text_enabled"].copy())
     text_frame = tk.Frame(container); text_frame.pack(fill="x", padx=10)
@@ -193,6 +222,14 @@ def main():
     def update_state(*_):
         en = use_var.get()
         cb_shown.config(state="readonly" if en else "disabled")
+
+        font_state = "readonly" if en else "disabled"
+        try:
+            font_dropdown.config(state=font_state)
+        except NameError:
+            pass
+
+            
         ang_cb_state = "normal" if en else "disabled"
         dim_cb_state = "normal" if en else "disabled"
         ang_var_checkbox = f3.winfo_children()[1] 
@@ -203,6 +240,17 @@ def main():
         dim_var_checkbox.config(state=dim_cb_state)
         boat_var_checkbox.config(state=dim_cb_state)
         error_var_checkbox.config(state="normal" if en else "disabled")
+
+        state_for_colors = "normal" if en else "disabled"
+        try:
+            bg_entry.config(state=state_for_colors)
+            bg_choose_btn.config(state=state_for_colors)
+            text_entry.config(state=state_for_colors)
+            text_choose_btn.config(state=state_for_colors)
+        except NameError:
+            pass
+
+            
         for i,key in enumerate(order):
             btnL, btnR = buttons[key]
             state = "normal" if en and i>0 else "disabled"
@@ -213,8 +261,16 @@ def main():
     use_var.trace_add("write", update_state)
     update_state()
 
-    # Save / Reset / Exit buttons
     def on_save():
+        bg_val = bg_var.get().strip()
+        txt_val = text_var.get().strip()
+        if not is_valid_hex(bg_val):
+            messagebox.showerror("Invalid Color", "Background color must be a hex code like #RRGGBB.")
+            return
+        if not is_valid_hex(txt_val):
+            messagebox.showerror("Invalid Color", "Text color must be a hex code like #RRGGBB.")
+            return
+    
         custom.update({
             "use_custom_pinned_image": use_var.get(),
             "shown_measurements": shown_var.get(),
@@ -223,6 +279,8 @@ def main():
             "show_boat_icon": boat_var.get(),
             "show_error_message": error_var.get(),
             "font_name": font_var.get(),
+            "background_color": bg_val,
+            "text_color": txt_val,
             "text_order": order,
             "text_enabled": {k: var.get() for k,var in check_vars.items()}
         })
@@ -240,6 +298,8 @@ def main():
             boat_var.set(custom["show_boat_icon"])
             error_var.set(custom["show_error_message"])
             font_var.set(custom["font_name"])
+            bg_var.set(custom["background_color"])
+            text_var.set(custom["text_color"])
             order[:] = custom["text_order"]
             for k,var in check_vars.items():
                 var.set(custom["text_enabled"].get(k, True))
