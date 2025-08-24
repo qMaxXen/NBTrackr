@@ -15,7 +15,7 @@ from colorama import Fore, Style
 
 # Program Version
 
-APP_VERSION = "v2.1.5"
+APP_VERSION = "v2.1.6"
 
 def get_latest_github_release_version():
     url = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
