@@ -16,7 +16,7 @@ import sys
 DEBUG_MODE = False  # Set to True to enable debug prints
 
 # Program Version
-APP_VERSION = "v2.1.5"
+APP_VERSION = "v2.1.6"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -68,6 +68,22 @@ def certainty_color(pct: float):
     pct = max(0.0, min(100.0, pct))
     return gradient_color((100 - pct) * 1.8)
 
+def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
+    try:
+        if not isinstance(hexstr, str):
+            return fallback
+        s = hexstr.strip()
+        if s.startswith("#"):
+            s = s[1:]
+        if len(s) != 6:
+            return fallback
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+        return (r, g, b)
+    except Exception:
+        return fallback
+
 
 # --------------------- Cache End --------------------------
 
@@ -84,6 +100,14 @@ def generate_custom_pinned_image():
     except Exception as e:
         log("Failed to read customizations:", e)
         return
+
+    bg_hex = custom.get("background_color", "#FFFFFF")
+    text_hex = custom.get("text_color", "#000000")
+
+    bg_rgb = hex_to_rgb(bg_hex, fallback=(255, 255, 255))
+    text_rgb = hex_to_rgb(text_hex, fallback=(0, 0, 0))
+
+    bg_rgba = (bg_rgb[0], bg_rgb[1], bg_rgb[2], 255)
 
     show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
@@ -116,9 +140,11 @@ def generate_custom_pinned_image():
         text_w, text_h = bbox[2]-bbox[0], bbox[3]-bbox[1]
 
         pad = 10
-        img = Image.new("RGBA", (text_w+2*pad, text_h+2*pad), (255,255,255,255))
+        
+        img = Image.new("RGBA", (text_w+2*pad, text_h+2*pad), bg_rgba)
         draw = ImageDraw.Draw(img)
-        draw.text((pad, pad), text, font=font, fill=(0,0,0))
+        draw.text((pad, pad), text, font=font, fill=text_rgb)
+
 
         img.save(IMAGE_PATH)
         tk_img = ImageTk.PhotoImage(img)
@@ -252,7 +278,7 @@ def generate_custom_pinned_image():
 
     max_w  = 0
     height = line_h * len(lines) + 10
-    img    = Image.new("RGBA", (800, height), (255,255,255,255))
+    img    = Image.new("RGBA", (800, height), bg_rgba)
     draw   = ImageDraw.Draw(img)
 
     for row, parts in enumerate(lines):
@@ -263,7 +289,7 @@ def generate_custom_pinned_image():
             val = item[1]
     
             txt = ""
-            fill = (0, 0, 0)
+            fill = text_rgb
     
             if kind == "certainty":
                 txt = val
@@ -271,7 +297,7 @@ def generate_custom_pinned_image():
                     pct = float(txt.rstrip("%"))
                     fill = certainty_color(pct)
                 except Exception:
-                    fill = (0, 0, 0)
+                    fill = text_rgb
     
             elif kind == "angle_adjust":
                 txt = val
@@ -279,7 +305,7 @@ def generate_custom_pinned_image():
                     pct = float(val)
                     fill = gradient_color(pct)
                 except Exception:
-                    fill = (0, 0, 0)
+                    fill = text_rgb
     
             elif kind == "distance":
                     try:
@@ -289,16 +315,16 @@ def generate_custom_pinned_image():
                         dval = None
                 
                     if in_nether:
-                        fill = (0, 0, 0)  # always black in Nether
+                        fill = text_rgb
                     else:
                         if dval is not None and dval <= 193:
-                            fill = (255, 165, 0)  # orange if close in OW
+                            fill = (255, 165, 0) 
                         else:
-                            fill = (0, 0, 0)
+                            fill = text_rgb
                                 
             else:
                 txt = str(val)
-                fill = (0, 0, 0)
+                fill = text_rgb
     
             draw.text((x, y), txt, font=font, fill=fill)
             spacer = " " if txt in ("->", "<-") else "   "
