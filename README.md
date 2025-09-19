@@ -40,6 +40,19 @@ tar -xf <filename>
 cd <extracted-folder>
 pip3 install -r requirements.txt
 ```
+> [!TIP]
+> Getting the `PEP 668 (externally-managed-environment)` error after running `pip3 install -r requirements.txt`? Create a Python virtual environment:
+> ```bash
+> # Make sure you are in the extracted folder
+> python3 -m venv venv
+> source venv/bin/activate
+> pip install -r requirements.txt
+> ```
+> To run the script from the terminal without needing to enter the venv, use the Python binary inside the venv:
+> ```bash
+> /full/path/to/venv/bin/python <script>.py
+> ```
+
 5. Now run the script with the following command:
 
 For desktop notifications:
