@@ -16,7 +16,7 @@ import sys
 DEBUG_MODE = False  # Set to True to enable debug prints
 
 # Program Version
-APP_VERSION = "v2.1.6"
+APP_VERSION = "v2.1.7"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -116,7 +116,8 @@ def generate_custom_pinned_image():
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
         stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
-    except Exception:
+    except Exception as e:
+        log("API request failed in generate_custom_pinned_image:", e)
         return
 
     boat_state  = boat_resp.get("boatState")
@@ -130,11 +131,16 @@ def generate_custom_pinned_image():
         
         text = "Could not determine the stronghold chunk."
         font_name = custom.get("font_name", "")
+
         try:
             font = ImageFont.truetype(font_name, _font_size)
-        except:
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf", _font_size) if _load_font else ImageFont.load_default()
+        except Exception:
+            try:
+                font = ImageFont.truetype("DejaVuSans-Bold.ttf", _font_size)
+            except Exception:
+                font = ImageFont.load_default()
 
+                
         dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
         bbox = dummy.textbbox((0,0), text, font=font)
         text_w, text_h = bbox[2]-bbox[0], bbox[3]-bbox[1]
@@ -180,10 +186,21 @@ def generate_custom_pinned_image():
             hide_window()
         return
 
+    try:
+        visible = False
+        try:
+            visible = bool(root.winfo_ismapped() and root.attributes("-alpha") and root.attributes("-alpha") > 0.0)
+        except Exception:
+            visible = bool(root.winfo_ismapped())
+    except Exception:
+        visible = True 
+    
     if (custom == _last_custom and
         boat_resp == _last_boat and
-        stronghold_resp == _last_stronghold):
+        stronghold_resp == _last_stronghold and
+        visible):
         return
+    
     _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
 
     preds      = stronghold_resp.get("predictions", [])
@@ -260,6 +277,8 @@ def generate_custom_pinned_image():
 
         if parts:
             lines.append(parts)
+
+    log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
     if not lines:
         hide_window()
