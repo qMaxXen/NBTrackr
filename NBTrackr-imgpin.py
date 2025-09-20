@@ -14,6 +14,7 @@ import tarfile
 import sys
 
 DEBUG_MODE = False  # Set to True to enable debug prints
+IDLE_UPDATE_DEFAULT = 0.3 # Default API polling rate when idle is 0.3s. Higher value = lower CPU usage. 
 
 # Program Version
 APP_VERSION = "v2.1.7"
@@ -644,7 +645,7 @@ def idle_update_frequency():
     
     
     if result_type not in ("TRIANGULATION", "BLIND"):
-        return 1.0
+        return IDLE_UPDATE_DEFAULT
     return 0.3      
 
 def api_polling_thread():
