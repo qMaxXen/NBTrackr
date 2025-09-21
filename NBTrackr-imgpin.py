@@ -152,12 +152,11 @@ def generate_custom_pinned_image():
         draw = ImageDraw.Draw(img)
         draw.text((pad, pad), text, font=font, fill=text_rgb)
 
-
-        img.save(IMAGE_PATH)
-        tk_img = ImageTk.PhotoImage(img)
-        label.config(image=tk_img); label.image = tk_img
-        place_window(img.width, img.height)
-        show_window()
+        try:
+            img.save(IMAGE_PATH)
+        except Exception as e:
+            log("Failed to save overlay image (error message):", e)
+        root.after(0, lambda im=img: apply_overlay_from_pil(im))
         return
 
     with status_lock:
@@ -167,7 +166,7 @@ def generate_custom_pinned_image():
 
     if show_boat_icon and result_type != "TRIANGULATION":
         if boat_state == "VALID" and boat_angle == 0:
-            hide_window()
+            root.after(0, hide_window)
             return
     
         if boat_state == last_shown and now < show_until:
@@ -176,15 +175,12 @@ def generate_custom_pinned_image():
             try:
                 icon = Image.open(icon_path).convert("RGBA")
                 icon = icon.resize((64, 64), Image.LANCZOS)
-                tk_img = ImageTk.PhotoImage(icon)
-                label.config(image=tk_img)
-                label.image = tk_img
-                place_window(64, 64)
-                show_window()
             except Exception as e:
                 log("Failed to load/process icon:", e)
+            else:
+                root.after(0, lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
-            hide_window()
+            root.after(0, hide_window)
         return
 
     try:
@@ -282,7 +278,7 @@ def generate_custom_pinned_image():
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
     if not lines:
-        hide_window()
+        root.after(0, hide_window)
         return
 
     font_name = custom.get("font_name", "")
@@ -352,17 +348,28 @@ def generate_custom_pinned_image():
             x += w
     
         max_w = max(max_w, x)
+
     
+    cropped = img.crop((0, 0, int(max_w + 10), height))
 
+    tmp = IMAGE_PATH + ".tmp.png"
+    try:
+        cropped.save(tmp, format="PNG")
+        try:
+            os.replace(tmp, IMAGE_PATH)  
+            log("Saved overlay image:", IMAGE_PATH)
+        except Exception:
+            try:
+                if os.path.exists(IMAGE_PATH):
+                    os.remove(IMAGE_PATH)
+                os.rename(tmp, IMAGE_PATH)
+                log("Saved overlay image via fallback rename:", IMAGE_PATH)
+            except Exception as e:
+                log("Failed to move tmp overlay file into place:", e)
+    except Exception as e:
+        log("Failed to save overlay image:", e)
 
-    cropped = img.crop((0, 0, int(max_w+10), height))
-    cropped.save(IMAGE_PATH)
-    tk_img = ImageTk.PhotoImage(cropped)
-    label.config(image=tk_img)
-    label.image = tk_img
-    place_window(cropped.width, cropped.height)
-    show_window()
-
+    root.after(0, lambda im=cropped: apply_overlay_from_pil(im))
 
 
 
@@ -505,7 +512,21 @@ def place_window(width, height):
         except Exception:
             pass
 
+def apply_overlay_from_pil(pil_img, width=None, height=None):
+    log("apply_overlay_from_pil: running on main thread")
+    try:
+        tk_img = ImageTk.PhotoImage(pil_img)
+        label.config(image=tk_img)
+        label.image = tk_img
 
+        w = int(width) if width is not None else pil_img.width
+        h = int(height) if height is not None else pil_img.height
+
+        place_window(w, h)
+        show_window()
+        log("apply_overlay_from_pil: overlay applied (w=%d h=%d)" % (w, h))
+    except Exception as e:
+        log("apply_overlay_from_pil: failed to apply overlay:", e)
 
 
 # ---------------------- Helpers - END ----------------------
