@@ -117,6 +117,9 @@ def generate_custom_pinned_image():
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
         stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
+    except requests.exceptions.RequestException:
+        print("ERROR: Ninjabrain Bot is not open or API is not enabled in Ninjabrain Bot.")
+        return
     except Exception as e:
         log("API request failed in generate_custom_pinned_image:", e)
         return
