@@ -130,4 +130,4 @@ python3 NBTrackr-imgpin.py
 
 ---
 
-If you need help or have any questions, feel free to contact me on Discord: **qMaxXen**.
+If you have any issues, feel free to ask for help in the `#public-help` channel in the [Linux MCSR Discord server](https://discord.gg/3tm4UpUQ8t).
