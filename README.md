@@ -28,14 +28,19 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > This is required for the overlay image to appear on your screen.
 > <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
 
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/tag/v2.1.7) section of this repository and download your preferred version.
-- For desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`
-- For pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/latest) section of this repository and download your preferred version.
+   - For desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`
+   - For pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 ```bash
 tar -xf <filename>
 ```
-4. You have to install the required Python packages to run NBTrackr with the following command:
+4. If you're using the **pinned image overlay method**, you must have tkinter installed:
+
+   - Debian/Ubuntu: `sudo apt install python3-tk`
+   - Arch Linux: `sudo pacman -S tk`
+   - Fedora: `sudo dnf install python3-tkinter`
+5. Install the required Python packages to run NBTrackr with the following command:
 ```bash
 cd <extracted-folder>
 pip3 install -r requirements.txt
@@ -53,7 +58,7 @@ pip3 install -r requirements.txt
 > /full/path/to/venv/bin/python <script>.py
 > ```
 
-5. Now run the script with the following command:
+6. Now run the script with the following command:
 
 For desktop notifications:
 ```bash
