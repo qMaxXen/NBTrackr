@@ -9,7 +9,7 @@
 Python scripts that display Ninjabrain Bot info using notifications or pinned image overlays (Linux).  This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
 
 ## Display Methods
-I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer. You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
+I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer.
 - To use desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`.
 - To use the pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`.
 
