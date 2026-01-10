@@ -9,7 +9,7 @@
 Python scripts that display Ninjabrain Bot info using notifications or pinned image overlays (Linux).  This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
 
 ## Display Methods
-I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer.
+I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer. You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
 - To use desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`.
 - To use the pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`.
 
@@ -36,7 +36,6 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 tar -xf <filename>
 ```
 4. If you're using the **pinned image overlay method**, you must have tkinter installed:
-
    - Debian/Ubuntu: `sudo apt install python3-tk`
    - Arch Linux: `sudo pacman -S tk`
    - Fedora: `sudo dnf install python3-tkinter`
@@ -58,16 +57,9 @@ pip3 install -r requirements.txt
 > /full/path/to/venv/bin/python <script>.py
 > ```
 
-6. Now run the script with the following command:
-
-For desktop notifications:
-```bash
-python3 NBTrackr-Notif.py
-```
-For pinned image overlay:
-```bash
-python3 NBTrackr-imgpin.py
-```
+6. Now run the script with the following command in the terminal:
+   - For desktop notifications: `python3 NBTrackr-Notif.py`
+   - For pinned image overlay: `python3 NBTrackr-imgpin.py`
 
 ## Features: Desktop Notifications
 
@@ -122,9 +114,7 @@ python3 NBTrackr-imgpin.py
 - To display the overlay in-game, run the `NBTrackr-imgpin.py` script.
 
 <img src="https://github.com/user-attachments/assets/b51263d4-731e-4dd4-b8e1-4ec81fc4b2cd" width="300"/>
-
-> The GUI for `Customizer-imgpin.py` is heavily inspired by the [Jingle-CalcOverlay-Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin) by **Marin774**.
-
+<br />
 <img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
 
 ### Known bugs
@@ -132,6 +122,10 @@ python3 NBTrackr-imgpin.py
 - **NBTrackr-imgpin on Wayland:** Hovering over the pinned image overlay while Minecraft is the active window may freeze the screen.
   - To unfreeze, switch to another workspace.
   - Because of this, if you want to move the pinned image overlay, do so while Minecraft is not the focused window.
+
+## Credits
+- [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
+- [marin774](https://github.com/marin774) – for creating the [Jingle CalcOverlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which inspired the GUI for `Customizer-imgpin.py`.
 
 ---
 
