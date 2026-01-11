@@ -32,6 +32,7 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
    - For desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`
    - For pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
+
    ```bash
    tar -xf <filename>
    ```
@@ -40,6 +41,7 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
    - Arch Linux: `sudo pacman -S tk`
    - Fedora: `sudo dnf install python3-tkinter`
 5. Install the required Python packages to run NBTrackr with the following command:
+
    ```bash
    cd <extracted-folder>
    pip3 install -r requirements.txt
