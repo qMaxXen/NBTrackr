@@ -17,7 +17,7 @@ DEBUG_MODE = False  # Set to True to enable debug prints
 IDLE_UPDATE_DEFAULT = 0.3 # Default API polling rate when idle is 0.3s. Higher value = lower CPU usage. 
 
 # Program Version
-APP_VERSION = "v2.1.7"
+APP_VERSION = "v2.2.0"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
