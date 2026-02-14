@@ -62,6 +62,14 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 6. Now run the script with the following command in the terminal:
    - For desktop notifications: `python3 NBTrackr-Notif.py`
    - For pinned image overlay: `python3 NBTrackr-imgpin.py`
+<<<<<<< HEAD
+=======
+> [!TIP]
+> On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on first launch. This behavior depends
+> on your window manager or desktop environment. On X11, it should not steal focus. To unfocus it, simply switch to a different
+> workspace or click on another window. If you ever click on the pinned image overlay window, you will need to repeat this
+> action.
+>>>>>>> 290c6ec (Add tip message explaining imgpin may steal focus on first launch)
 
 ## Features: Desktop Notifications
 
@@ -119,11 +127,9 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 <br />
 <img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
 
-### Known bugs
-
-- **NBTrackr-imgpin on Wayland:** Hovering over the pinned image overlay while Minecraft is the active window may freeze the screen.
-  - To unfreeze, switch to another workspace.
-  - Because of this, if you want to move the pinned image overlay, do so while Minecraft is not the focused window.
+## Credits
+- [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
+- [Marin774](https://github.com/marin774) – for creating the [Jingle CalcOverlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which inspired the GUI for `Customizer-imgpin.py`.
 
 ## Credits
 - [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
@@ -131,4 +137,8 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 
 ---
 
+<<<<<<< HEAD
 If you have any issues, feel free to ask for help in the `#public-help` channel in the [Linux MCSR Discord server](https://discord.gg/3tm4UpUQ8t).
+=======
+If you have any issues, feel free to ask for help in the `#public-help` channel in the [Linux MCSR Discord server](https://discord.gg/3tm4UpUQ8t).
+>>>>>>> 290c6ec (Add tip message explaining imgpin may steal focus on first launch)
