@@ -35,15 +35,22 @@ _last_stronghold = None
 
 _font = None
 _font_name = None
-_font_size = 18
 
-def _load_font(name: str):
+def get_font_size():
+    try:
+        with open(CUSTOMIZATIONS_FILE, "r") as f:
+            custom = json.load(f)
+        return custom.get("font_size", 18)
+    except:
+        return 18
+
+def _load_font(name: str, size: int):
     global _font, _font_name
     if name == _font_name and _font:
         return _font
     for fn in (name, "DejaVuSans-Bold.ttf"):
         try:
-            _font = ImageFont.truetype(fn, _font_size)
+            _font = ImageFont.truetype(fn, size)
             _font_name = name
             return _font
         except Exception:
@@ -51,7 +58,6 @@ def _load_font(name: str):
     _font = ImageFont.load_default()
     _font_name = None
     return _font
-
 
 def gradient_color(angle: float):
     if angle <= 90:
@@ -63,8 +69,6 @@ def gradient_color(angle: float):
     red   = 255
     green = int(255 * (1 - t))
     return (red, green, 0)
-
-
 
 def certainty_color(pct: float):
     pct = max(0.0, min(100.0, pct))
@@ -137,11 +141,12 @@ def generate_custom_pinned_image():
         text = "Could not determine the stronghold chunk."
         font_name = custom.get("font_name", "")
 
+        font_size = custom.get("font_size", 18)
         try:
-            font = ImageFont.truetype(font_name, _font_size)
+            font = ImageFont.truetype(font_name, font_size)
         except Exception:
             try:
-                font = ImageFont.truetype("DejaVuSans-Bold.ttf", _font_size)
+                font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
             except Exception:
                 font = ImageFont.load_default()
 
@@ -286,11 +291,12 @@ def generate_custom_pinned_image():
         return
 
     font_name = custom.get("font_name", "")
+    font_size = custom.get("font_size", 18)
     try:
-        font = ImageFont.truetype(font_name, _font_size)
+        font = ImageFont.truetype(font_name, font_size)
     except:
         try:
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf", _font_size)
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
         except:
             font = ImageFont.load_default()
     ascent, descent = font.getmetrics()

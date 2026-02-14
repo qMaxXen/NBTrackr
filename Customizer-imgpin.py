@@ -14,6 +14,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "show_boat_icon": False,
     "show_error_message": False,
     "font_name": "Helvetica",
+    "font_size": 18,
     "background_color": "#FFFFFF",
     "text_color": "#000000",
     "text_order": [
@@ -98,7 +99,7 @@ def main():
 
     root = tk.Tk()
     root.title("NBTrackr Customizer")
-    root.geometry("450x685")
+    root.geometry("450x900")
     root.resizable(False, False)
 
     tk.Label(root, text="Customize Pinned Image Overlay", font=("Helvetica", 14)).pack(pady=10)
@@ -157,6 +158,11 @@ def main():
 
     font_dropdown.bind("<<ComboboxSelected>>", clear_selection)
 
+    f_size = tk.Frame(container); f_size.pack(fill="x", pady=5)
+    tk.Label(f_size, text="Font size", width=12, anchor="w").pack(side="left")
+    font_size_var = tk.IntVar(value=custom.get("font_size", DEFAULT_CUSTOMIZATIONS["font_size"]))
+    font_size_spinbox = tk.Spinbox(f_size, from_=8, to=48, textvariable=font_size_var, width=8)
+    font_size_spinbox.pack(side="left", padx=5)
 
     def apply_font_dropdown(*_):
         try:
@@ -226,9 +232,9 @@ def main():
         font_state = "readonly" if en else "disabled"
         try:
             font_dropdown.config(state=font_state)
+            font_size_spinbox.config(state="normal" if en else "disabled") 
         except NameError:
             pass
-
             
         ang_cb_state = "normal" if en else "disabled"
         dim_cb_state = "normal" if en else "disabled"
@@ -279,6 +285,7 @@ def main():
             "show_boat_icon": boat_var.get(),
             "show_error_message": error_var.get(),
             "font_name": font_var.get(),
+            "font_size": font_size_var.get(),
             "background_color": bg_val,
             "text_color": txt_val,
             "text_order": order,
@@ -298,6 +305,7 @@ def main():
             boat_var.set(custom["show_boat_icon"])
             error_var.set(custom["show_error_message"])
             font_var.set(custom["font_name"])
+            font_size_var.set(custom["font_size"])
             bg_var.set(custom["background_color"])
             text_var.set(custom["text_color"])
             order[:] = custom["text_order"]
