@@ -98,8 +98,8 @@ def main():
     custom = load_customizations()
 
     root = tk.Tk()
-    root.title("NBTrackr Customizer")
-    root.geometry("450x900")
+    root.title("NBTrackr Pinned Image Overlay Customizer")
+    root.geometry("450x100")
     root.resizable(False, False)
 
     tk.Label(root, text="Customize Pinned Image Overlay", font=("Helvetica", 14)).pack(pady=10)
@@ -319,6 +319,20 @@ def main():
     tk.Button(btn_frame, text="Save Settings", command=on_save).pack(side="left")
     tk.Button(btn_frame, text="Reset", command=on_reset).pack(side="left", padx=5)
     tk.Button(btn_frame, text="Exit", command=root.destroy).pack(side="right")
+
+    def adjust_window_height():
+        root.update_idletasks()
+        
+        required_height = 0
+        for child in root.winfo_children():
+            required_height += child.winfo_reqheight()
+        
+        required_height += 40
+        
+        current_width = root.winfo_width()
+        root.geometry(f"{current_width}x{required_height}")
+    
+    root.after(100, adjust_window_height)
 
     root.mainloop()
 
