@@ -660,7 +660,7 @@ def is_image_nonempty(path):
         with Image.open(path) as img:
             img = img.convert("RGBA")
             alpha = img.getchannel("A")
-            return any(pixel != 0 for pixel in alpha.getdata())
+            return any(pixel != 0 for pixel in alpha.get_flattened_data())
     except Exception:
         return False
 
