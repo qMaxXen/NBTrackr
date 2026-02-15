@@ -134,8 +134,4 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 
 ---
 
-<<<<<<< HEAD
 If you have any issues, feel free to ask for help in the `#public-help` channel in the [Linux MCSR Discord server](https://discord.gg/3tm4UpUQ8t).
-=======
-If you have any issues, feel free to ask for help in the `#public-help` channel in the [Linux MCSR Discord server](https://discord.gg/3tm4UpUQ8t).
->>>>>>> 290c6ec (Add tip message explaining imgpin may steal focus on first launch)
