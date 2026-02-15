@@ -32,6 +32,7 @@ position_set = False
 _last_custom = None
 _last_boat = None
 _last_stronghold = None
+_last_blind = None
 
 _font = None
 _font_name = None
@@ -74,6 +75,28 @@ def certainty_color(pct: float):
     pct = max(0.0, min(100.0, pct))
     return gradient_color((100 - pct) * 1.8)
 
+def blind_evaluation_color(evaluation):
+    colors = {
+        'EXCELLENT': (0, 255, 0),         
+        'HIGHROLL_GOOD': (100, 255, 100),  
+        'HIGHROLL_OKAY': (114, 214, 2),     
+        'BAD_BUT_IN_RING': (222, 220, 3), 
+        'BAD': (255, 100, 0),                
+        'NOT_IN_RING': (255, 0, 0)         
+    }
+    return colors.get(evaluation, (255, 255, 255))
+
+def format_blind_evaluation(evaluation):
+    evaluations = {
+        'EXCELLENT': 'excellent',
+        'HIGHROLL_GOOD': 'good for highroll',
+        'HIGHROLL_OKAY': 'okay for highroll',
+        'BAD_BUT_IN_RING': 'bad, but in ring',
+        'BAD': 'bad',
+        'NOT_IN_RING': 'not in any ring'
+    }
+    return evaluations.get(evaluation, evaluation)
+
 def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
     try:
         if not isinstance(hexstr, str):
@@ -98,7 +121,7 @@ def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
 
 
 def generate_custom_pinned_image():
-    global _last_custom, _last_boat, _last_stronghold
+    global _last_custom, _last_boat, _last_stronghold, _last_blind
 
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
@@ -118,10 +141,14 @@ def generate_custom_pinned_image():
     show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
     show_error_message = custom.get("show_error_message", False)
+    show_blind_info    = custom.get("show_blind_info", True)
+    blind_hide_after   = custom.get("blind_info_hide_after", 20)
+    font_size          = custom.get("font_size", 18)
 
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
         stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
+        blind_resp      = requests.get("http://localhost:52533/api/v1/blind", timeout=1).json()
     except requests.exceptions.RequestException:
         print("ERROR: Ninjabrain Bot is not open or API is not enabled in Ninjabrain Bot.")
         return
@@ -134,7 +161,160 @@ def generate_custom_pinned_image():
     
     result_type = stronghold_resp.get("resultType")
 
+    blind_enabled = blind_resp.get("isBlindModeEnabled", False)
+    blind_result = blind_resp.get("blindResult", {})
 
+    now = time.time()
+    
+    has_valid_blind_result = blind_result and blind_result.get("evaluation") is not None
+    
+    with status_lock:
+        blind_was_showing = status.get("blindCurrentlyShowing", False)
+    
+    should_show_blind = (show_blind_info and blind_enabled and has_valid_blind_result and 
+                        result_type in ("NONE", "BLIND"))
+    
+    if blind_was_showing:
+        should_hide = False
+        
+        if not show_blind_info:
+            should_hide = True
+        elif not blind_enabled:
+            should_hide = True
+        elif not has_valid_blind_result:
+            should_hide = True
+        elif result_type not in ("NONE", "BLIND"):
+            should_hide = True
+        
+        if should_hide:
+            log("Hiding blind info and clearing cache for regeneration")
+            with status_lock:
+                status["blindCurrentlyShowing"] = False
+            _last_blind = None
+            _last_custom = None
+            _last_boat = None
+            _last_stronghold = None
+    
+    if should_show_blind:
+        with status_lock:
+            blind_show_until = status["blindShowUntil"]
+            blind_currently_showing = status.get("blindCurrentlyShowing", False)
+            
+            if blind_show_until > 0 and not blind_currently_showing:
+                status["blindShowUntil"] = now + blind_hide_after
+                blind_show_until = status["blindShowUntil"]
+                log(f"Set new blind timer: {blind_hide_after}s, expires at {blind_show_until:.2f}")
+        
+        if now < blind_show_until:
+            blind_cache_key = (
+                blind_result.get("evaluation"),
+                blind_result.get("xInNether"),
+                blind_result.get("zInNether"),
+                blind_result.get("highrollProbability"),
+                blind_result.get("highrollThreshold"),
+                blind_result.get("improveDirection"),
+                blind_result.get("improveDistance"),
+                font_size,
+                bg_hex,
+                text_hex
+            )
+            
+            if blind_currently_showing and blind_cache_key == _last_blind:
+                log("Blind info unchanged, skipping regeneration")
+                return
+            
+            _last_blind = blind_cache_key
+            
+            evaluation = blind_result.get("evaluation", "")
+            x_nether = blind_result.get("xInNether", 0)
+            z_nether = blind_result.get("zInNether", 0)
+            highroll_prob = blind_result.get("highrollProbability", 0) * 100
+            highroll_thresh = blind_result.get("highrollThreshold", 400)
+            improve_dir = blind_result.get("improveDirection", 0)
+            improve_dist = blind_result.get("improveDistance", 0)
+            
+            eval_text = format_blind_evaluation(evaluation)
+            
+            line1_pre = f"Blind coords ({int(x_nether)}, {int(z_nether)}) are "
+            line1_eval = eval_text
+            
+            highroll_pct_text = f"{highroll_prob:.1f}%"
+            line2_post = f" chance of <{int(highroll_thresh)} block blind"
+            
+            improve_deg = math.degrees(improve_dir)
+            line3 = f"Head {improve_deg:.0f}°, {int(improve_dist)} blocks away, for better coords."
+            
+            font_name = custom.get("font_name", "")
+            try:
+                font = ImageFont.truetype(font_name, font_size)
+            except:
+                try:
+                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+                except:
+                    font = ImageFont.load_default()
+            
+            dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
+            
+            bbox_line1_pre = dummy.textbbox((0,0), line1_pre, font=font)
+            bbox_line1_eval = dummy.textbbox((0,0), line1_eval, font=font)
+            w_line1_pre = bbox_line1_pre[2] - bbox_line1_pre[0]
+            w_line1_eval = bbox_line1_eval[2] - bbox_line1_eval[0]
+            
+            bbox_line2_pct = dummy.textbbox((0,0), highroll_pct_text, font=font)
+            bbox_line2_post = dummy.textbbox((0,0), line2_post, font=font)
+            w_line2_pct = bbox_line2_pct[2] - bbox_line2_pct[0]
+            w_line2_post = bbox_line2_post[2] - bbox_line2_post[0]
+            
+            bbox_line3 = dummy.textbbox((0,0), line3, font=font)
+            w_line3 = bbox_line3[2] - bbox_line3[0]
+            
+            max_w = max(w_line1_pre + w_line1_eval, w_line2_pct + w_line2_post, w_line3)
+            
+            ascent, descent = font.getmetrics()
+            line_h = ascent + descent + 6
+            height = line_h * 3 + 20
+            
+            pad = 10
+            img = Image.new("RGBA", (int(max_w + 2*pad), height), bg_rgba)
+            draw = ImageDraw.Draw(img)
+            
+            eval_color = blind_evaluation_color(evaluation)
+            
+            x = pad
+            y = 10
+            draw.text((x, y), line1_pre, font=font, fill=text_rgb)
+            x += w_line1_pre
+            draw.text((x, y), line1_eval, font=font, fill=eval_color)
+            
+            x = pad
+            y += line_h
+            draw.text((x, y), highroll_pct_text, font=font, fill=eval_color)
+            x += w_line2_pct
+            draw.text((x, y), line2_post, font=font, fill=text_rgb)
+            
+            y += line_h
+            draw.text((pad, y), line3, font=font, fill=text_rgb)
+            
+            try:
+                img.save(IMAGE_PATH)
+                log(f"Saved blind overlay image, timer expires at {blind_show_until:.2f}")
+            except Exception as e:
+                log("Failed to save blind overlay image:", e)
+            
+            with status_lock:
+                status["blindCurrentlyShowing"] = True
+            
+            root.after(0, lambda im=img: apply_overlay_from_pil(im))
+            return
+    
+
+
+    if result_type == "TRIANGULATION":
+        with status_lock:
+            if status["blindShowUntil"] > 0:
+                log("Result type is TRIANGULATION, clearing blind timer")
+                status["blindShowUntil"] = 0
+    
     if show_error_message and result_type == "FAILED":
         _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
         
@@ -608,7 +788,7 @@ if __name__ == "__main__":
         else:
             print("Skipping update. Continuing with current version", APP_VERSION, "\n")
 
-# --------------------- NBTrackr Pin Image --------------------------
+# --------------------- NBTrackr Pinned Image Overlay --------------------------
 
 
 IMAGE_PATH_DEFAULT = "/tmp/nb-overlay.png"
@@ -650,7 +830,11 @@ status = {
     "isInNether": False,
     "lastShown": None,
     "showUntil": 0,
-    "lastAngle": None
+    "lastAngle": None,
+    "blindModeEnabled": False,
+    "blindResult": None,
+    "blindShowUntil": 0,
+    "blindCurrentlyShowing": False
 }
 
 USE_CUSTOM_PINNED_IMAGE = load_customizations()
@@ -672,17 +856,20 @@ def is_image_nonempty(path):
 
 def idle_update_frequency():
     with status_lock:
-        result_type = status["resultType"]    
+        result_type = status["resultType"]
+        blind_showing = status.get("blindCurrentlyShowing", False)
     
-    if result_type not in ("TRIANGULATION", "BLIND"):
-        return IDLE_API_POLLING_RATE
-    return min(0.3, MAX_API_POLLING_RATE)    
+    if result_type == "TRIANGULATION" or (result_type == "BLIND" and blind_showing):
+        return MAX_API_POLLING_RATE
+    
+    return IDLE_API_POLLING_RATE
 
 def api_polling_thread():
     while True:
         try:
             boat_resp = requests.get("http://localhost:52533/api/v1/boat", timeout=0.5).json()
             stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=0.5).json()
+            blind_resp = requests.get("http://localhost:52533/api/v1/blind", timeout=0.5).json()
 
             boat_state = boat_resp.get("boatState")
             result_type = stronghold_resp.get("resultType")
@@ -690,14 +877,47 @@ def api_polling_thread():
             is_in_nether = stronghold_resp.get("playerPosition", {}).get("isInNether", False)
 
             now = time.time()
+            
+            blind_enabled = blind_resp.get("isBlindModeEnabled", False)
+            blind_result = blind_resp.get("blindResult", {})
+            
             with status_lock:
                 prev_state = status["lastShown"]
                 prev_angle = status["lastAngle"]
                 expired = now >= status["showUntil"]
+                prev_blind_result = status["blindResult"]
+                prev_blind_enabled = status["blindModeEnabled"]
 
                 status["boatState"] = boat_state
                 status["resultType"] = result_type
                 status["isInNether"] = is_in_nether
+                status["blindModeEnabled"] = blind_enabled
+                
+                blind_changed = False
+                has_valid_result = blind_result and blind_result.get("evaluation") is not None
+                prev_had_valid_result = prev_blind_result and prev_blind_result.get("evaluation") is not None
+                
+                if has_valid_result and prev_had_valid_result:
+                    if (blind_result.get("evaluation") != prev_blind_result.get("evaluation") or
+                        blind_result.get("xInNether") != prev_blind_result.get("xInNether") or
+                        blind_result.get("zInNether") != prev_blind_result.get("zInNether")):
+                        blind_changed = True
+                elif has_valid_result and not prev_had_valid_result:
+                    blind_changed = True
+                elif not has_valid_result and prev_had_valid_result:
+                    log("Blind result cleared (no calculations)")
+                    status["blindShowUntil"] = 0
+                
+                status["blindResult"] = blind_result if has_valid_result else None
+                
+                if blind_changed or (blind_enabled and not prev_blind_enabled and blind_result):
+                    status["blindShowUntil"] = now + 20 
+                    log(f"Blind result changed or newly enabled, setting timer until {status['blindShowUntil']}")
+                
+                if not blind_enabled or result_type == "TRIANGULATION":
+                    if status["blindShowUntil"] > 0:
+                        log("Clearing blind timer: disabled or triangulation mode")
+                    status["blindShowUntil"] = 0
 
                 if result_type in ("NONE", "BLIND") and boat_state in ("VALID", "ERROR"):
                     if boat_state == "VALID":
@@ -731,8 +951,12 @@ def api_polling_thread():
                 status["lastShown"] = None
                 status["showUntil"] = 0
                 status["lastAngle"] = None
+                status["blindModeEnabled"] = False
+                status["blindResult"] = None
+                status["blindShowUntil"] = 0
+                status["blindCurrentlyShowing"] = False
 
-        time.sleep(0.3)
+        time.sleep(MAX_API_POLLING_RATE)
 
 def custom_image_update_thread():
     while True:
@@ -740,6 +964,32 @@ def custom_image_update_thread():
             generate_custom_pinned_image()
         time.sleep(idle_update_frequency())
 
+def blind_timer_monitor_thread():
+    while True:
+        with status_lock:
+            blind_show_until = status["blindShowUntil"]
+            blind_currently_showing = status.get("blindCurrentlyShowing", False)
+        
+        if blind_currently_showing and blind_show_until > 0:
+            now = time.time()
+            time_remaining = blind_show_until - now
+            
+            if time_remaining <= 0:
+                log(f"[Timer Monitor] Blind timer expired, hiding")
+                with status_lock:
+                    status["blindCurrentlyShowing"] = False
+                    status["blindShowUntil"] = 0
+                try:
+                    root.after(0, hide_window)
+                except:
+                    pass
+                time.sleep(1)
+            else:
+                sleep_time = min(time_remaining, 1.0)
+                log(f"[Timer Monitor] Sleeping {sleep_time:.1f}s until blind expires")
+                time.sleep(sleep_time)
+        else:
+            time.sleep(1)
 
 def image_loader_thread():
     last_logged_state = None
@@ -873,6 +1123,7 @@ threading.Thread(target=api_polling_thread, daemon=True).start()
 
 if USE_CUSTOM_PINNED_IMAGE:
     threading.Thread(target=custom_image_update_thread, daemon=True).start()
+    threading.Thread(target=blind_timer_monitor_thread, daemon=True).start()
 else:
     threading.Thread(target=image_loader_thread, daemon=True).start()
 
