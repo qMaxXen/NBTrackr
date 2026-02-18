@@ -2,7 +2,35 @@ import os
 import json
 import tkinter as tk
 import tkinter.font as tkFont
+import subprocess
 from tkinter import ttk, messagebox, colorchooser
+
+def find_dejavu_bold_path():
+    known_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",          
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",             
+        "/usr/share/fonts/truetype/DejaVuSans-Bold.ttf",       
+        "/run/current-system/sw/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  
+        os.path.expanduser("~/.fonts/DejaVuSans-Bold.ttf"),
+        os.path.expanduser("~/.local/share/fonts/DejaVuSans-Bold.ttf"),
+    ]
+    for p in known_paths:
+        if os.path.isfile(p):
+            return p
+
+    try:
+        result = subprocess.run(
+            ["fc-match", "--format=%{file}", "DejaVu Sans:style=Bold"],
+            capture_output=True, text=True, timeout=3
+        )
+        path = result.stdout.strip()
+        if path and os.path.isfile(path) and path.lower().endswith((".ttf", ".otf")):
+            return path
+    except Exception:
+        pass
+
+    return ""
 
 CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 
@@ -16,7 +44,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "show_blind_info": True,
     "blind_info_hide_after": 20,
     "blind_info_hide_after_enabled": False,
-    "font_name": "Helvetica",
+    "font_name": find_dejavu_bold_path(),
     "font_size": 18,
     "background_color": "#FFFFFF",
     "text_color": "#000000",
@@ -95,6 +123,41 @@ def is_valid_hex(s):
     except ValueError:
         return False
 
+def find_system_fonts():
+    fonts = {}
+
+    search_dirs = [
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        "/run/current-system/sw/share/fonts",          
+        os.path.expanduser("~/.fonts"),
+        os.path.expanduser("~/.local/share/fonts"),
+    ]
+    for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
+        for root, dirs, files in os.walk(d):
+            for fname in files:
+                if fname.lower().endswith((".ttf", ".otf")):
+                    path = os.path.join(root, fname)
+                    display = os.path.splitext(fname)[0]
+                    fonts[display] = path
+
+    if not fonts:
+        try:
+            result = subprocess.run(
+                ["fc-list", "--format=%{file}\n"],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.splitlines():
+                path = line.strip()
+                if path and os.path.isfile(path) and path.lower().endswith((".ttf", ".otf")):
+                    display = os.path.splitext(os.path.basename(path))[0]
+                    fonts[display] = path
+        except Exception:
+            pass
+
+    return dict(sorted(fonts.items()))
 
 def main():
     ensure_custom_file_exists()
@@ -181,10 +244,16 @@ def main():
     tk.Label(container, text="Appearance:", font=("Helvetica", 12)).pack(pady=(15,5), anchor="w")
     f5 = tk.Frame(container); f5.pack(fill="x", pady=5)
     tk.Label(f5, text="Font", width=12, anchor="w").pack(side="left")
-    font_var = tk.StringVar(value=custom.get("font_name", DEFAULT_CUSTOMIZATIONS["font_name"]))
-    all_fonts = sorted(tkFont.families())
+
+    system_fonts = find_system_fonts()  
+    font_path_to_display = {v: k for k, v in system_fonts.items()}
+
+    saved_font_path = custom.get("font_name", "")
+    saved_font_display = font_path_to_display.get(saved_font_path, "")
+
+    font_var = tk.StringVar(value=saved_font_display)
     font_dropdown = ttk.Combobox(f5, textvariable=font_var, state="readonly")
-    font_dropdown['values'] = all_fonts
+    font_dropdown['values'] = list(system_fonts.keys())
     font_dropdown.pack(side="left", fill="x", expand=True)
 
     def clear_selection(event):
@@ -324,7 +393,7 @@ def main():
             "show_blind_info": blind_info_var.get(),
             "blind_info_hide_after": blind_hide_after_var.get(),
             "blind_info_hide_after_enabled": blind_hide_after_enabled_var.get(),   
-            "font_name": font_var.get(),
+            "font_name": system_fonts.get(font_var.get(), ""),
             "font_size": font_size_var.get(),
             "background_color": bg_val,
             "text_color": txt_val,
@@ -344,7 +413,7 @@ def main():
             dim_var.set(custom["show_coords_based_on_dimension"])
             boat_var.set(custom["show_boat_icon"])
             error_var.set(custom["show_error_message"])
-            font_var.set(custom["font_name"])
+            font_var.set(font_path_to_display.get(custom["font_name"], ""))
             font_size_var.set(custom["font_size"])
             blind_info_var.set(custom["show_blind_info"])
             blind_hide_after_var.set(custom["blind_info_hide_after"])

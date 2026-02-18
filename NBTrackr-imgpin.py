@@ -15,7 +15,7 @@ import sys
 
 DEBUG_MODE = False  # Set to True to enable debug prints
 IDLE_API_POLLING_RATE = 0.3  # Default API polling rate when idle (default is 300ms). Higher value = lower CPU usage.
-MAX_API_POLLING_RATE = 0.15  # Maximum API polling rate (default is 150ms). Program will never poll slower than this.
+MAX_API_POLLING_RATE = 0.15  # Maximum API polling rate (default is 150ms). The program will never poll slower than this.
 
 # Program Version
 APP_VERSION = "v2.2.0"
@@ -216,12 +216,12 @@ def generate_custom_pinned_image():
             blind_currently_showing = status.get("blindCurrentlyShowing", False)
             
             if blind_show_until > 0 and not blind_currently_showing:
-                        if blind_hide_after_enabled:
-                            status["blindShowUntil"] = now + blind_hide_after
-                            blind_show_until = status["blindShowUntil"]
-                        else:
-                            status["blindShowUntil"] = float("inf")
-                            blind_show_until = status["blindShowUntil"]
+                if blind_hide_after_enabled:
+                    status["blindShowUntil"] = now + blind_hide_after
+                    blind_show_until = status["blindShowUntil"]
+                else:
+                    status["blindShowUntil"] = float("inf")
+                    blind_show_until = status["blindShowUntil"]
         
         if now < blind_show_until:
             blind_cache_key = (
@@ -263,13 +263,25 @@ def generate_custom_pinned_image():
             line3 = f"Head {improve_deg:.0f}°, {int(improve_dist)} blocks away, for better coords."
             
             font_name = custom.get("font_name", "")
-            try:
-                font = ImageFont.truetype(font_name, font_size)
-            except:
+            font = None
+            if font_name:
                 try:
-                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
-                except:
-                    font = ImageFont.load_default()
+                    font = ImageFont.truetype(font_name, font_size)
+                except Exception:
+                    pass
+            if font is None:
+                for fallback in (
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+                    "DejaVuSans-Bold.ttf",
+                ):
+                    try:
+                        font = ImageFont.truetype(fallback, font_size)
+                        break
+                    except Exception:
+                        continue
+            if font is None:
+                font = ImageFont.load_default()
             
             dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
             
@@ -341,14 +353,25 @@ def generate_custom_pinned_image():
         font_name = custom.get("font_name", "")
 
         font_size = custom.get("font_size", 18)
-        try:
-            font = ImageFont.truetype(font_name, font_size)
-        except Exception:
+        font = None
+        if font_name:
             try:
-                font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+                font = ImageFont.truetype(font_name, font_size)
             except Exception:
-                font = ImageFont.load_default()
-
+                pass
+        if font is None:
+            for fallback in (
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+                "DejaVuSans-Bold.ttf",
+            ):
+                try:
+                    font = ImageFont.truetype(fallback, font_size)
+                    break
+                except Exception:
+                    continue
+        if font is None:
+            font = ImageFont.load_default()
                 
         dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
         bbox = dummy.textbbox((0,0), text, font=font)
@@ -491,13 +514,26 @@ def generate_custom_pinned_image():
 
     font_name = custom.get("font_name", "")
     font_size = custom.get("font_size", 18)
-    try:
-        font = ImageFont.truetype(font_name, font_size)
-    except:
+    font = None
+    if font_name:
         try:
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
-        except:
-            font = ImageFont.load_default()
+            font = ImageFont.truetype(font_name, font_size)
+        except Exception:
+            pass
+    if font is None:
+        for fallback in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "DejaVuSans-Bold.ttf",
+        ):
+            try:
+                font = ImageFont.truetype(fallback, font_size)
+                break
+            except Exception:
+                continue
+    if font is None:
+        font = ImageFont.load_default()
+
     ascent, descent = font.getmetrics()
     line_h = ascent + descent + 6
 
