@@ -157,7 +157,7 @@ def find_system_fonts():
         except Exception:
             pass
 
-    return dict(sorted(fonts.items()))
+    return dict(sorted(fonts.items(), key=lambda x: x[0].lower()))
 
 def main():
     ensure_custom_file_exists()
