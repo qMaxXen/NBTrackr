@@ -9,12 +9,13 @@ CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 DEFAULT_CUSTOMIZATIONS = {
     "use_custom_pinned_image": False,
     "shown_measurements": 1,
-    "show_angle_direction": False,
+    "show_angle_direction": True,    
     "show_coords_based_on_dimension": False,
-    "show_boat_icon": False,
-    "show_error_message": False,
+    "show_boat_icon": True,           
+    "show_error_message": True,       
     "show_blind_info": True,
     "blind_info_hide_after": 20,
+    "blind_info_hide_after_enabled": False,
     "font_name": "Helvetica",
     "font_size": 18,
     "background_color": "#FFFFFF",
@@ -146,14 +147,36 @@ def main():
     tk.Label(f_error, text="Show “Could not determine” error", anchor="w").pack(side="left")
     tk.Checkbutton(f_error, variable=error_var).pack(side="left", padx=5)
 
-    f_blind = tk.Frame(container); f_blind.pack(fill="x", pady=5)
+    f_blind = tk.Frame(container); f_blind.pack(fill="x", pady=(5,0))
     blind_info_var = tk.BooleanVar(value=custom.get("show_blind_info", True))
     tk.Label(f_blind, text="Show blind information", anchor="w").pack(side="left")
     tk.Checkbutton(f_blind, variable=blind_info_var).pack(side="left", padx=5)
-    tk.Label(f_blind, text="Hide after", anchor="w").pack(side="left", padx=(5,5), pady=(0,2))
+
+    f_blind_sub = tk.Frame(container); f_blind_sub.pack(fill="x", pady=(0,5))
+    blind_hide_after_enabled_var = tk.BooleanVar(value=custom.get("blind_info_hide_after_enabled", False))
+    tk.Label(f_blind_sub, text="    •", anchor="w", fg="#000000").pack(side="left")
+    blind_hide_after_check = tk.Checkbutton(f_blind_sub, variable=blind_hide_after_enabled_var)
+    blind_hide_after_check.pack(side="left")
+    blind_hide_after_label = tk.Label(f_blind_sub, text="Hide after", anchor="w")
+    blind_hide_after_label.pack(side="left", padx=(4,5))
     blind_hide_after_var = tk.IntVar(value=custom.get("blind_info_hide_after", 20))
-    tk.Spinbox(f_blind, from_=1, to=300, textvariable=blind_hide_after_var, width=5).pack(side="left", padx=5)
-    tk.Label(f_blind, text="seconds", anchor="w").pack(side="left")
+    blind_hide_spinbox = tk.Spinbox(f_blind_sub, from_=1, to=300, textvariable=blind_hide_after_var, width=5)
+    blind_hide_spinbox.pack(side="left", padx=5)
+    blind_hide_seconds_label = tk.Label(f_blind_sub, text="seconds", anchor="w")
+    blind_hide_seconds_label.pack(side="left")
+
+    def update_blind_hide_after_state(*_):
+        blind_on = blind_info_var.get() and use_var.get()
+        blind_hide_after_check.config(state="normal" if blind_on else "disabled")
+        enabled = blind_hide_after_enabled_var.get() and blind_on
+        state = "normal" if enabled else "disabled"
+        blind_hide_spinbox.config(state=state)
+        blind_hide_after_label.config(state=state)
+        blind_hide_seconds_label.config(state=state)
+
+    blind_hide_after_enabled_var.trace_add("write", update_blind_hide_after_state)
+    blind_info_var.trace_add("write", update_blind_hide_after_state)
+    update_blind_hide_after_state()
 
     tk.Label(container, text="Appearance:", font=("Helvetica", 12)).pack(pady=(15,5), anchor="w")
     f5 = tk.Frame(container); f5.pack(fill="x", pady=5)
@@ -258,9 +281,8 @@ def main():
         boat_var_checkbox.config(state=dim_cb_state)
         error_var_checkbox.config(state="normal" if en else "disabled")
         blind_info_checkbox = f_blind.winfo_children()[1]
-        blind_hide_spinbox = f_blind.winfo_children()[3]
         blind_info_checkbox.config(state="normal" if en else "disabled")
-        blind_hide_spinbox.config(state="normal" if en else "disabled")
+        update_blind_hide_after_state()
 
         state_for_colors = "normal" if en else "disabled"
         try:
@@ -301,6 +323,7 @@ def main():
             "show_error_message": error_var.get(),
             "show_blind_info": blind_info_var.get(),
             "blind_info_hide_after": blind_hide_after_var.get(),
+            "blind_info_hide_after_enabled": blind_hide_after_enabled_var.get(),   
             "font_name": font_var.get(),
             "font_size": font_size_var.get(),
             "background_color": bg_val,
@@ -325,6 +348,8 @@ def main():
             font_size_var.set(custom["font_size"])
             blind_info_var.set(custom["show_blind_info"])
             blind_hide_after_var.set(custom["blind_info_hide_after"])
+            blind_hide_after_enabled_var.set(custom.get("blind_info_hide_after_enabled", False))  
+            update_blind_hide_after_state()  
             bg_var.set(custom["background_color"])
             text_var.set(custom["text_color"])
             order[:] = custom["text_order"]

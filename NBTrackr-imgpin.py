@@ -15,7 +15,7 @@ import sys
 
 DEBUG_MODE = False  # Set to True to enable debug prints
 IDLE_API_POLLING_RATE = 0.3  # Default API polling rate when idle (default is 300ms). Higher value = lower CPU usage.
-MAX_API_POLLING_RATE = 0.05  # Maximum API polling rate (default is 50ms). Program will never poll slower than this.
+MAX_API_POLLING_RATE = 0.15  # Maximum API polling rate (default is 150ms). Program will never poll slower than this.
 
 # Program Version
 APP_VERSION = "v2.2.0"
@@ -33,6 +33,7 @@ _last_custom = None
 _last_boat = None
 _last_stronghold = None
 _last_blind = None
+_cached_customizations = None
 
 _font = None
 _font_name = None
@@ -44,6 +45,17 @@ def get_font_size():
         return custom.get("font_size", 18)
     except:
         return 18
+
+def get_customizations():
+    global _cached_customizations
+    if _cached_customizations is not None:
+        return _cached_customizations
+    try:
+        with open(CUSTOMIZATIONS_FILE, "r") as f:
+            _cached_customizations = json.load(f)
+    except Exception:
+        _cached_customizations = {}
+    return _cached_customizations
 
 def _load_font(name: str, size: int):
     global _font, _font_name
@@ -123,9 +135,11 @@ def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
 def generate_custom_pinned_image():
     global _last_custom, _last_boat, _last_stronghold, _last_blind
 
+    global _cached_customizations
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             custom = json.load(f)
+        _cached_customizations = custom  
     except Exception as e:
         log("Failed to read customizations:", e)
         return
@@ -143,6 +157,7 @@ def generate_custom_pinned_image():
     show_error_message = custom.get("show_error_message", False)
     show_blind_info    = custom.get("show_blind_info", True)
     blind_hide_after   = custom.get("blind_info_hide_after", 20)
+    blind_hide_after_enabled  = custom.get("blind_info_hide_after_enabled", False)
     font_size          = custom.get("font_size", 18)
 
     try:
@@ -201,9 +216,12 @@ def generate_custom_pinned_image():
             blind_currently_showing = status.get("blindCurrentlyShowing", False)
             
             if blind_show_until > 0 and not blind_currently_showing:
-                status["blindShowUntil"] = now + blind_hide_after
-                blind_show_until = status["blindShowUntil"]
-                log(f"Set new blind timer: {blind_hide_after}s, expires at {blind_show_until:.2f}")
+                        if blind_hide_after_enabled:
+                            status["blindShowUntil"] = now + blind_hide_after
+                            blind_show_until = status["blindShowUntil"]
+                        else:
+                            status["blindShowUntil"] = float("inf")
+                            blind_show_until = status["blindShowUntil"]
         
         if now < blind_show_until:
             blind_cache_key = (
@@ -317,6 +335,7 @@ def generate_custom_pinned_image():
     
     if show_error_message and result_type == "FAILED":
         _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
+        _cached_customizations = custom  
         
         text = "Could not determine the stronghold chunk."
         font_name = custom.get("font_name", "")
@@ -911,8 +930,10 @@ def api_polling_thread():
                 status["blindResult"] = blind_result if has_valid_result else None
                 
                 if blind_changed or (blind_enabled and not prev_blind_enabled and blind_result):
-                    status["blindShowUntil"] = now + 20 
-                    log(f"Blind result changed or newly enabled, setting timer until {status['blindShowUntil']}")
+                    _c = get_customizations()
+                    _hide_enabled = _c.get("blind_info_hide_after_enabled", False)
+                    _hide_after = _c.get("blind_info_hide_after", 20)
+                    status["blindShowUntil"] = (now + _hide_after) if _hide_enabled else float("inf")
                 
                 if not blind_enabled or result_type == "TRIANGULATION":
                     if status["blindShowUntil"] > 0:
