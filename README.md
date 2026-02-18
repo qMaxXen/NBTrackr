@@ -10,8 +10,8 @@ Python scripts that display Ninjabrain Bot info using notifications or pinned im
 
 ## Display Methods
 I created two ways to display Ninjabrain Bot info. The first uses desktop notifications, while the second shows the built-in overlay provided by Ninjabrain Bot as a pinned image. You can also customize the pinned image overlay. Choose whichever method you prefer.
-- To use desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`.
-- To use the pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`.
+- To use desktop notifications, download `NBTrackr-Notif-v2.2.0.tar.xz`.
+- To use the pinned image overlay, download `NBTrackr-imgpin-v2.2.0.tar.xz`.
 
 > You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
 
@@ -29,8 +29,8 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > <img src="https://github.com/user-attachments/assets/31afbb2b-597d-447e-9578-652a21d21d1d" width="500"/>
 
 2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/latest) section of this repository and download your preferred version.
-   - For desktop notifications, download `NBTrackr-Notif-v2.1.7.tar.xz`
-   - For pinned image overlay, download `NBTrackr-imgpin-v2.1.7.tar.xz`
+   - For desktop notifications, download `NBTrackr-Notif-v2.2.0.tar.xz`
+   - For pinned image overlay, download `NBTrackr-imgpin-v2.2.0.tar.xz`
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 
    ```bash
@@ -120,9 +120,9 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
   - Customization settings are saved to `~/.config/NBTrackr/customizations.json`.
 - To display the overlay in-game, run the `NBTrackr-imgpin.py` script.
 
-<img src="https://github.com/user-attachments/assets/b51263d4-731e-4dd4-b8e1-4ec81fc4b2cd" width="300"/>
+<img src="https://github.com/user-attachments/assets/a9d7602a-f498-4973-9a6a-8602441f6857" width="300"/>
 <br />
-<img src="https://github.com/user-attachments/assets/eaca085e-83bb-4e7e-93b3-3921edcdd1e3" width="500"/>
+<img src="https://github.com/user-attachments/assets/86bc35da-5947-452d-9fcf-7bcbd4cb1b03" width="500"/>
 
 ## Credits
 - [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
