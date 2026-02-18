@@ -367,13 +367,16 @@ def generate_custom_pinned_image():
                 
         dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
         bbox = dummy.textbbox((0,0), text, font=font)
-        text_w, text_h = bbox[2]-bbox[0], bbox[3]-bbox[1]
+        text_w  = bbox[2] - bbox[0]
+        text_h  = bbox[3] - bbox[1]
+        offset_x = bbox[0]
+        offset_y = bbox[1]
 
         pad = 10
-        
+
         img = Image.new("RGBA", (text_w+2*pad, text_h+2*pad), bg_rgba)
         draw = ImageDraw.Draw(img)
-        draw.text((pad, pad), text, font=font, fill=text_rgb)
+        draw.text((pad - offset_x, pad - offset_y), text, font=font, fill=text_rgb)
 
         try:
             img.save(IMAGE_PATH)
