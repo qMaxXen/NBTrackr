@@ -38,14 +38,6 @@ _cached_customizations = None
 _font = None
 _font_name = None
 
-def get_font_size():
-    try:
-        with open(CUSTOMIZATIONS_FILE, "r") as f:
-            custom = json.load(f)
-        return custom.get("font_size", 18)
-    except:
-        return 18
-
 def get_customizations():
     global _cached_customizations
     if _cached_customizations is not None:
