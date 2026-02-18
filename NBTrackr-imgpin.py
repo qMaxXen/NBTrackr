@@ -554,8 +554,8 @@ def generate_custom_pinned_image():
                     txt = str(val)
             else:
                 txt = str(val)
-            spacer = " " if txt in ("->", "<-") else "   "
-            row_w += dummy.textbbox((0, 0), txt + spacer, font=font)[2]
+            pixel_gap = 6 if txt in ("->", "<-") else 14
+            row_w += dummy.textbbox((0, 0), txt, font=font)[2] + pixel_gap
         required_w = max(required_w, row_w)
 
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
@@ -607,8 +607,8 @@ def generate_custom_pinned_image():
                 fill = text_rgb
     
             draw.text((x, y), txt, font=font, fill=fill)
-            spacer = " " if txt in ("->", "<-") else "   "
-            w = draw.textbbox((0, 0), txt + spacer, font=font)[2]
+            pixel_gap = 6 if txt in ("->", "<-") else 14
+            w = draw.textbbox((0, 0), txt, font=font)[2] + pixel_gap
             x += w
     
         max_w = max(max_w, x)
