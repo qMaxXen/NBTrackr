@@ -539,8 +539,27 @@ def generate_custom_pinned_image():
 
     max_w  = 0
     height = line_h * len(lines) + 10
-    img    = Image.new("RGBA", (800, height), bg_rgba)
-    draw   = ImageDraw.Draw(img)
+
+    dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    required_w = 20
+    for parts in lines:
+        row_w = 10
+        for item in parts:
+            kind = item[0]
+            val = item[1]
+            if kind == "distance":
+                try:
+                    txt, _ = val
+                except Exception:
+                    txt = str(val)
+            else:
+                txt = str(val)
+            spacer = " " if txt in ("->", "<-") else "   "
+            row_w += dummy.textbbox((0, 0), txt + spacer, font=font)[2]
+        required_w = max(required_w, row_w)
+
+    img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
+    draw = ImageDraw.Draw(img)
 
     for row, parts in enumerate(lines):
         x = 10
@@ -595,13 +614,11 @@ def generate_custom_pinned_image():
         max_w = max(max_w, x)
 
     
-    cropped = img.crop((0, 0, int(max_w + 10), height))
-
     tmp = IMAGE_PATH + ".tmp.png"
     try:
-        cropped.save(tmp, format="PNG")
+        img.save(tmp, format="PNG")
         try:
-            os.replace(tmp, IMAGE_PATH)  
+            os.replace(tmp, IMAGE_PATH)
             log("Saved overlay image:", IMAGE_PATH)
         except Exception:
             try:
@@ -614,9 +631,7 @@ def generate_custom_pinned_image():
     except Exception as e:
         log("Failed to save overlay image:", e)
 
-    root.after(0, lambda im=cropped: apply_overlay_from_pil(im))
-
-
+    root.after(0, lambda im=img: apply_overlay_from_pil(im))
 
 # --------------------- END Generate custom pinned image ----------------------
 
