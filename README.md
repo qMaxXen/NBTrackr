@@ -1,7 +1,7 @@
 # NBTrackr
 
-[![GitHub release](https://img.shields.io/github/v/release/qMaxXen/NBTrackr?logo=github)](https://github.com/qMaxXen/NBTrackr/releases)
-[![GitHub downloads](https://img.shields.io/github/downloads/qMaxXen/NBTrackr/total?logo=github)](https://github.com/qMaxXen/NBTrackr/releases)
+[![GitHub release](https://img.shields.io/github/v/release/qMaxXen/NBTrackr?logo=github)](https://github.com/qMaxXen/NBTrackr/releases/latest)
+[![GitHub downloads](https://img.shields.io/github/downloads/qMaxXen/NBTrackr/total?logo=github)](https://github.com/qMaxXen/NBTrackr/releases/latest)
 
 > [!IMPORTANT]
 > This script works **only on Linux**.
