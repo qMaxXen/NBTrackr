@@ -126,7 +126,7 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 
 ## Credits
 - [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
-- [Marin774](https://github.com/marin774) – for creating the [Jingle CalcOverlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which inspired the GUI for `Customizer-imgpin.py`.
+- [Marin774](https://github.com/marin774) – for creating the [Jingle CalcOverlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which inspired the GUI for `Customizer-imgpin.py`, and for generally inspiring parts of the implementation.
 
 ---
 

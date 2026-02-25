@@ -38,6 +38,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "use_custom_pinned_image": False,
     "shown_measurements": 1,
     "show_angle_direction": True,    
+    "show_angle_adjustment_count": False,
     "show_coords_based_on_dimension": False,
     "show_boat_icon": True,           
     "show_error_message": True,       
@@ -189,11 +190,28 @@ def main():
     
     cb_shown.bind("<<ComboboxSelected>>", clear_selection)
     
-
     f3 = tk.Frame(container); f3.pack(fill="x", pady=5)
     ang_var = tk.BooleanVar(value=custom.get("show_angle_direction", False))
     tk.Label(f3, text="Show angle direction (e.g. <- 24.3)", anchor="w").pack(side="left")
     tk.Checkbutton(f3, variable=ang_var).pack(side="left", padx=5)
+
+    f3b = tk.Frame(container); f3b.pack(fill="x", pady=5)
+    adj_count_var = tk.BooleanVar(value=custom.get("show_angle_adjustment_count", False))
+    tk.Label(f3b, text="Show angle adjustment count", anchor="w").pack(side="left")
+    tk.Checkbutton(f3b, variable=adj_count_var).pack(side="left", padx=5)
+
+    def on_adj_count_toggled(*_):
+        if adj_count_var.get():
+            messagebox.showwarning(
+                "NBTrackr - Angle Adjustment Count",
+                "The angle adjustment count is an estimate because\n"
+                "Ninjabrain Bot API doesn't provide the exact number of adjustments.\n\n"
+                "It should work correctly most of the time,\n"
+                "but be aware that it's not 100% accurate.\n\n"
+                "This will be fixed in Ninjabrain Bot v1.5.2+."
+            )
+
+    adj_count_var.trace_add("write", on_adj_count_toggled)
 
     f4 = tk.Frame(container); f4.pack(fill="x", pady=5)
     dim_var = tk.BooleanVar(value=custom.get("show_coords_based_on_dimension", False))
@@ -342,10 +360,12 @@ def main():
         ang_cb_state = "normal" if en else "disabled"
         dim_cb_state = "normal" if en else "disabled"
         ang_var_checkbox = f3.winfo_children()[1] 
+        adj_count_checkbox = f3b.winfo_children()[1]
         dim_var_checkbox = f4.winfo_children()[1]  
         boat_var_checkbox = f_boat.winfo_children()[1]
         error_var_checkbox = f_error.winfo_children()[1]
         ang_var_checkbox.config(state=ang_cb_state)
+        adj_count_checkbox.config(state=ang_cb_state)
         dim_var_checkbox.config(state=dim_cb_state)
         boat_var_checkbox.config(state=dim_cb_state)
         error_var_checkbox.config(state="normal" if en else "disabled")
@@ -387,6 +407,7 @@ def main():
             "use_custom_pinned_image": use_var.get(),
             "shown_measurements": shown_var.get(),
             "show_angle_direction": ang_var.get(),
+            "show_angle_adjustment_count": adj_count_var.get(),
             "show_coords_based_on_dimension": dim_var.get(),
             "show_boat_icon": boat_var.get(),
             "show_error_message": error_var.get(),
@@ -410,6 +431,7 @@ def main():
             use_var.set(custom["use_custom_pinned_image"])
             shown_var.set(custom["shown_measurements"])
             ang_var.set(custom["show_angle_direction"])
+            adj_count_var.set(custom["show_angle_adjustment_count"])
             dim_var.set(custom["show_coords_based_on_dimension"])
             boat_var.set(custom["show_boat_icon"])
             error_var.set(custom["show_error_message"])

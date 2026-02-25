@@ -35,8 +35,9 @@ _last_stronghold = None
 _last_blind = None
 _cached_customizations = None
 
-_font = None
-_font_name = None
+_nb_settings_cache = None
+_nb_settings_cache_time = 0
+NB_SETTINGS_CACHE_TTL = 60.0
 
 def get_customizations():
     global _cached_customizations
@@ -49,20 +50,60 @@ def get_customizations():
         _cached_customizations = {}
     return _cached_customizations
 
-def _load_font(name: str, size: int):
-    global _font, _font_name
-    if name == _font_name and _font:
-        return _font
-    for fn in (name, "DejaVuSans-Bold.ttf"):
-        try:
-            _font = ImageFont.truetype(fn, size)
-            _font_name = name
-            return _font
-        except Exception:
-            continue
-    _font = ImageFont.load_default()
-    _font_name = None
-    return _font
+def get_ninjabrainbot_settings():
+    global _nb_settings_cache, _nb_settings_cache_time
+    now = time.time()
+    if _nb_settings_cache is not None and (now - _nb_settings_cache_time) < NB_SETTINGS_CACHE_TTL:
+        return _nb_settings_cache
+
+    prefs_path = os.path.expanduser("~/.java/.userPrefs/ninjabrainbot/prefs.xml")
+    result = {}
+    try:
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(prefs_path)
+        root_el = tree.getroot()
+        for entry in root_el.iter("entry"):
+            key = entry.get("key")
+            val = entry.get("value")
+            if key is None or val is None:
+                continue
+            try:
+                result[key] = int(val)
+                continue
+            except ValueError:
+                pass
+            try:
+                result[key] = float(val)
+                continue
+            except ValueError:
+                pass
+            result[key] = val
+    except Exception as e:
+        log("get_ninjabrain_settings: failed to read NB prefs:", e)
+
+    _nb_settings_cache = result
+    _nb_settings_cache_time = now
+    return result
+
+
+def calculate_correction_increments(correction: float, settings: dict) -> int:
+    BETA = -31.0
+    adj_type = int(settings.get("angle_adjustment_type", 0))
+
+    if adj_type == 1:
+        to_rad = math.pi / 180.0
+        height = float(settings.get("resolution_height", 16384.0))
+        change = math.atan(2 * math.tan(15 * to_rad) / height) / math.cos(BETA * to_rad) / to_rad
+    elif adj_type == 2:
+        change = float(settings.get("custom_adjustment", 0.01))
+    else:
+        change = 0.01
+
+    if change == 0:
+        return 0
+
+    raw = correction / change
+    return int(math.floor(raw + 0.5))
 
 def gradient_color(angle: float):
     if angle <= 90:
@@ -78,6 +119,9 @@ def gradient_color(angle: float):
 def certainty_color(pct: float):
     pct = max(0.0, min(100.0, pct))
     return gradient_color((100 - pct) * 1.8)
+
+ADJ_COUNT_POSITIVE = (117, 204, 108)   
+ADJ_COUNT_NEGATIVE = (204, 110, 114)  
 
 def blind_evaluation_color(evaluation):
     colors = {
@@ -151,6 +195,7 @@ def generate_custom_pinned_image():
     blind_hide_after   = custom.get("blind_info_hide_after", 20)
     blind_hide_after_enabled  = custom.get("blind_info_hide_after_enabled", False)
     font_size          = custom.get("font_size", 18)
+    show_adj_count     = custom.get("show_angle_adjustment_count", False)
 
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
@@ -427,6 +472,7 @@ def generate_custom_pinned_image():
     _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
 
     preds      = stronghold_resp.get("predictions", [])
+    eye_throws = stronghold_resp.get("eyeThrows", [])
     player_pos = stronghold_resp.get("playerPosition", {})
     player_x   = player_pos.get("xInOverworld")
     player_z   = player_pos.get("zInOverworld")
@@ -439,7 +485,7 @@ def generate_custom_pinned_image():
     show_dir    = custom.get("show_angle_direction", True)
 
     lines = []
-    for pred in preds[:shown_count]:
+    for pred_idx, pred in enumerate(preds[:shown_count]):
         cx, cz = pred.get("chunkX"), pred.get("chunkZ")
         cert   = pred.get("certainty")
         dist   = pred.get("overworldDistance")
@@ -483,6 +529,18 @@ def generate_custom_pinned_image():
                     arrow = "->" if turn > 0 else "<-"
                     parts.append(("text", arrow))
                     parts.append(("angle_adjust", f"{abs(turn):.1f}"))
+
+                if show_adj_count and eye_throws and pred_idx == 0:
+                    last_throw = eye_throws[-1]
+                    angle_with = last_throw.get("angle", 0.0)
+                    angle_without = last_throw.get("angleWithoutCorrection", 0.0)
+                    correction = angle_with - angle_without
+                    nb_settings = get_ninjabrainbot_settings()
+                    increments = calculate_correction_increments(correction, nb_settings)
+                    log("Angle adjustment count:", increments, "from correction:", correction, "(angle:", angle_with, "angleWithoutCorrection:", angle_without, ")")
+                    if increments != 0:
+                        sign = "+" if increments >= 0 else ""
+                        parts.append(("adj_count", (f"{sign}{increments}", increments)))
 
             elif key == "overworld_coords":
                 x, z = cx*16+4, cz*16+4
@@ -547,6 +605,11 @@ def generate_custom_pinned_image():
                     txt, _ = val
                 except Exception:
                     txt = str(val)
+            elif kind == "adj_count":
+                try:
+                    txt, _ = val
+                except Exception:
+                    txt = str(val)
             else:
                 txt = str(val)
             pixel_gap = 6 if txt in ("->", "<-") else 14
@@ -596,7 +659,13 @@ def generate_custom_pinned_image():
                             fill = (255, 165, 0) 
                         else:
                             fill = text_rgb
-                                
+            elif kind == "adj_count":
+                try:
+                    txt, raw_int = val
+                except Exception:
+                    txt = str(val)
+                    raw_int = 0
+                fill = ADJ_COUNT_POSITIVE if raw_int >= 0 else ADJ_COUNT_NEGATIVE  
             else:
                 txt = str(val)
                 fill = text_rgb
