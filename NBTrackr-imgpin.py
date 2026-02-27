@@ -13,12 +13,8 @@ import tempfile
 import tarfile
 import sys
 
-DEBUG_MODE = False  # Set to True to enable debug prints
-IDLE_API_POLLING_RATE = 0.3  # Default API polling rate when idle (default is 300ms). Higher value = lower CPU usage.
-MAX_API_POLLING_RATE = 0.15  # Maximum API polling rate (default is 150ms). The program will never poll slower than this.
-
 # Program Version
-APP_VERSION = "v2.2.0"
+APP_VERSION = "v2.3.0"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
@@ -49,6 +45,20 @@ def get_customizations():
     except Exception:
         _cached_customizations = {}
     return _cached_customizations
+
+def _load_advanced_settings():
+    try:
+        with open(CUSTOMIZATIONS_FILE, "r") as f:
+            data = json.load(f)
+        return (
+            bool(data.get("debug_mode", False)),
+            float(data.get("idle_api_polling_rate", 0.3)),
+            float(data.get("max_api_polling_rate", 0.15)),
+        )
+    except Exception:
+        return False, 0.3, 0.15
+
+DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
 
 def get_ninjabrainbot_settings():
     global _nb_settings_cache, _nb_settings_cache_time
