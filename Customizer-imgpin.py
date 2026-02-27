@@ -53,8 +53,8 @@ DEFAULT_CUSTOMIZATIONS = {
     "blind_info_hide_after_enabled": False,
     "font_name": find_dejavu_bold_path(),
     "font_size": 18,
-    "background_color": "#FFFFFF",
-    "text_color": "#000000",
+    "background_color": "#000000",
+    "text_color": "#FFFFFF",
     "negative_coords_color_enabled": True,
     "negative_coords_color": "#BA6669",
     "text_order": [
@@ -172,8 +172,8 @@ PREVIEW_PLAYER = {"xInOverworld": 120.0, "zInOverworld": -55.0,
                   "horizontalAngle": -31.5, "isInNether": False}
 
 def render_eye_throws_preview(settings: dict) -> Image.Image:
-    bg_hex      = settings.get("background_color", "#FFFFFF")
-    text_hex    = settings.get("text_color", "#000000")
+    bg_hex   = settings.get("background_color", "#000000")
+    text_hex = settings.get("text_color", "#FFFFFF")
     bg_rgb      = _hex_to_rgb(bg_hex, (255, 255, 255))
     text_rgb    = _hex_to_rgb(text_hex, (0, 0, 0))
     neg_coords_enabled = settings.get("negative_coords_color_enabled", False)
