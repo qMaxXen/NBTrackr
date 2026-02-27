@@ -155,9 +155,11 @@ def _load_preview_font(font_name, font_size):
     return ImageFont.load_default()
 
 PREVIEW_EYE_DATA = [
-    {"chunkX": 23, "chunkZ": -41, "certainty": 0.812, "overworldDistance": 847.0},
-    {"chunkX": 24, "chunkZ": -42, "certainty": 0.134, "overworldDistance": 851.0},
-    {"chunkX": 22, "chunkZ": -41, "certainty": 0.054, "overworldDistance": 843.0},
+    {"chunkX": 23,  "chunkZ": -41, "certainty": 0.812, "overworldDistance": 847.0},
+    {"chunkX": 24,  "chunkZ": -42, "certainty": 0.134, "overworldDistance": 851.0},
+    {"chunkX": 22,  "chunkZ": -41, "certainty": 0.054, "overworldDistance": 843.0},
+    {"chunkX": -12, "chunkZ": 38,  "certainty": 0.000, "overworldDistance": 1203.0},
+    {"chunkX": 31,  "chunkZ": -55, "certainty": 0.000, "overworldDistance": 962.0},
 ]
 PREVIEW_PLAYER = {"xInOverworld": 120.0, "zInOverworld": -55.0,
                   "horizontalAngle": -31.5, "isInNether": False}
@@ -232,10 +234,8 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     parts.append(("text", f"{signed:.2f}"))
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
-                    if show_ang:
-                        parts.append(("angle_change", f" {arrow} {abs(turn):.1f}"))
-                    else:
-                        parts.append(("angle_change", f"{arrow} {abs(turn):.1f}"))
+                    parts.append(("angle_arrow", arrow))
+                    parts.append(("angle_adjust", f"{abs(turn):.1f}"))
             elif key == "overworld_coords":
                 if ow_coords_format == "chunk":
                     ox, oz = cx, cz
@@ -270,7 +270,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             txt = f"({cx_v}, {cz_v})"
         else:
             txt = str(val)
-        gap = 14
+        gap = 6 if kind == "angle_arrow" else 14
         return dummy.textbbox((0, 0), txt, font=font)[2] + gap
 
     col_widths = []
@@ -300,9 +300,9 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         y = 5 + row * line_h
 
         for _item in parts:
-            if _item[0] == "angle_change":
+            if _item[0] == "angle_adjust":
                 try:
-                    _last_turn_pct[0] = float(_item[1].strip().split()[-1])
+                    _last_turn_pct[0] = float(_item[1])
                 except Exception:
                     pass
                 break
@@ -324,12 +324,13 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
-            elif kind == "angle_change":
+            elif kind in ("angle_arrow", "angle_adjust"):
                 txt = val
-                try:
-                    _last_turn_pct[0] = float(txt.strip().split()[-1])
-                except Exception:
-                    pass
+                if kind == "angle_adjust":
+                    try:
+                        _last_turn_pct[0] = float(val)
+                    except Exception:
+                        pass
                 draw.text((_cx(txt), y), txt, font=font,
                           fill=_gradient_color(_last_turn_pct[0]))
 
