@@ -58,11 +58,11 @@ DEFAULT_CUSTOMIZATIONS = {
     "negative_coords_color_enabled": False,
     "negative_coords_color": "#BA6669",
     "text_order": [
-        "distance",
-        "certainty_percentage",
-        "angle",
         "overworld_coords",
-        "nether_coords"
+        "certainty_percentage",
+        "distance",
+        "nether_coords",
+        "angle"
     ],
     "text_enabled": {
         "distance": True,
