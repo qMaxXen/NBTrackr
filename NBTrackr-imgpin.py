@@ -212,8 +212,9 @@ def generate_custom_pinned_image():
     neg_coords_enabled = custom.get("negative_coords_color_enabled", False)
     neg_coords_hex     = custom.get("negative_coords_color", "#CC6E72")
     neg_coords_rgb     = hex_to_rgb(neg_coords_hex, fallback=(204, 110, 114))
-    show_angle_error   = custom.get("show_angle_error", False)
-    angle_display_mode = custom.get("angle_display_mode", "angle_and_change")
+    show_angle_error    = custom.get("show_angle_error", False)
+    angle_display_mode  = custom.get("angle_display_mode", "angle_and_change")
+    show_overlay_header = custom.get("show_overlay_header", False)
 
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
@@ -636,7 +637,10 @@ def generate_custom_pinned_image():
 
     max_w  = 0
     n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays))
-    bottom_extra_h = (line_h - 4) * n_bottom_rows
+    _small_font_size_est = max(8, int(font_size * 0.90))
+    _small_line_h_est = _small_font_size_est + 4 + 4
+    _overlay_header_h_est = _small_line_h_est if (show_overlay_header and n_bottom_rows > 0) else 0
+    bottom_extra_h = _overlay_header_h_est + (_small_line_h_est - 2) * n_bottom_rows if n_bottom_rows > 0 else 0
     height = header_h + line_h * len(lines) + 10 + bottom_extra_h
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
@@ -798,6 +802,31 @@ def generate_custom_pinned_image():
 
         max_w = max(max_w, rightmost_x)
 
+    small_font_size = max(8, int(font_size * 0.90))
+    small_font = None
+    font_name_val = custom.get("font_name", "")
+    if font_name_val:
+        try:
+            small_font = ImageFont.truetype(font_name_val, small_font_size)
+        except Exception:
+            pass
+    if small_font is None:
+        for fallback in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "DejaVuSans-Bold.ttf",
+        ):
+            try:
+                small_font = ImageFont.truetype(fallback, small_font_size)
+                break
+            except Exception:
+                continue
+    if small_font is None:
+        small_font = ImageFont.load_default()
+
+    small_ascent, small_descent = small_font.getmetrics()
+    small_line_h = small_ascent + small_descent + 4
+
     actual_left = None
     actual_right = None
     for parts in lines[-1:]:
@@ -842,23 +871,56 @@ def generate_custom_pinned_image():
         actual_right = 10
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
-    for oi in range(n_overlay_rows):
-        row_y = (header_h + line_h * len(lines) + 10) + oi * (line_h - 4) - 2
+    if n_overlay_rows == 0:
+        pass
+    else:
+        overlay_header_h = small_line_h if show_overlay_header else 0
+        base_y = header_h + line_h * len(lines) + 10
 
-        if oi < len(adj_count_overlays):
-            angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
-            adj_fill = ADJ_COUNT_POSITIVE if adj_raw >= 0 else ADJ_COUNT_NEGATIVE
-            angle_w  = draw.textbbox((0, 0), angle_txt, font=font)[2]
-            count_w  = draw.textbbox((0, 0), count_txt, font=font)[2]
-            total_w  = angle_w + count_w
-            adj_x    = actual_right - total_w
-            adj_x    = max(adj_x, actual_left)
-            draw.text((adj_x, row_y), angle_txt, font=font, fill=text_rgb)
-            draw.text((adj_x + angle_w, row_y), count_txt, font=font, fill=adj_fill)
+        first_err_x = None
+        first_err_w = None
+        first_adj_x = None
+        first_adj_total_w = None
 
-        if oi < len(angle_error_overlays):
-            err_txt = angle_error_overlays[oi][0]
-            draw.text((actual_left, row_y), err_txt, font=font, fill=text_rgb)
+        for oi in range(n_overlay_rows):
+            row_y = base_y + overlay_header_h + oi * (small_line_h - 2) - 2
+
+            if oi < len(adj_count_overlays):
+                angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
+                adj_fill = ADJ_COUNT_POSITIVE if adj_raw >= 0 else ADJ_COUNT_NEGATIVE
+                angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
+                count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+                total_w = angle_w + count_w
+                if oi == 0:
+                    adj_x = actual_right - total_w
+                    first_adj_x = adj_x
+                    first_adj_total_w = total_w
+                else:
+                    adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
+                draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgb)
+                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
+
+            if oi < len(angle_error_overlays):
+                err_txt = angle_error_overlays[oi][0]
+                err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font)[2]
+                if oi == 0:
+                    err_x = actual_left
+                    first_err_x = err_x
+                    first_err_w = err_txt_w
+                else:
+                    err_x = first_err_x + (first_err_w - err_txt_w) // 2
+                draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgb)
+
+        if show_overlay_header and n_overlay_rows > 0:
+            hdr_y = base_y - 2
+            if angle_error_overlays and first_err_x is not None and first_err_w is not None:
+                err_hdr_w = draw.textbbox((0, 0), "Error", font=small_font)[2]
+                err_hdr_x = first_err_x + (first_err_w - err_hdr_w) // 2
+                draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=text_rgb)
+            if adj_count_overlays and first_adj_x is not None and first_adj_total_w is not None:
+                adj_hdr_w = draw.textbbox((0, 0), "Angle", font=small_font)[2]
+                adj_hdr_x = first_adj_x + (first_adj_total_w - adj_hdr_w) // 2
+                draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=text_rgb)
     
     tmp = IMAGE_PATH + ".tmp.png"
     try:

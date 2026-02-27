@@ -45,6 +45,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "angle_display_mode": "angle_and_change",    
     "show_angle_adjustment_count": False,
     "show_angle_error": False,
+    "show_overlay_header": True,
     "show_coords_based_on_dimension": False,
     "show_boat_icon": True,           
     "show_error_message": True,       
@@ -310,7 +311,13 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     has_header = any(text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True))
     header_h = line_h if has_header else 0
+    show_overlay_header = settings.get("show_overlay_header", False)
+    _small_font_size_est = max(8, int(font_size * 0.90))
+    _small_line_h_est = _small_font_size_est + 4 + 4
+    _overlay_header_h_est = _small_line_h_est if (show_overlay_header and n_bottom_rows > 0) else 0
+    bottom_extra_h = (_overlay_header_h_est + (_small_line_h_est - 2) * n_bottom_rows) if n_bottom_rows > 0 else 0
     height = header_h + line_h * len(lines) + 10 + bottom_extra_h
+
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
 
@@ -351,11 +358,6 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             hx = span_start + (span_w - tw) // 2
             draw.text((hx, 5), hdr_txt, font=font, fill=text_rgb)
 
-    col_x = []
-    cx_acc = 10
-    for w in col_widths:
-        col_x.append(cx_acc)
-        cx_acc += w
     _last_turn_pct = [0.0]
 
     for row, parts in enumerate(lines):
@@ -426,6 +428,13 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 txt = str(val)
                 draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
 
+    small_font_size = max(8, int(font_size * 0.90))
+    small_font = _load_preview_font(font_name, small_font_size)
+    small_ascent, small_descent = small_font.getmetrics()
+    small_line_h = small_ascent + small_descent + 4
+
+    show_overlay_header = settings.get("show_overlay_header", False)
+
     actual_left = None
     actual_right = None
     for parts in lines[-1:]:
@@ -467,26 +476,58 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         actual_right = 10
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
+    if n_overlay_rows == 0:
+        return img
+
+    overlay_header_h = small_line_h if show_overlay_header else 0
+    base_y = header_h + line_h * len(lines) + 10
+
+    first_err_x = None
+    first_err_w = None
+    first_adj_x = None
+    first_adj_total_w = None
+
     for oi in range(n_overlay_rows):
-        row_y = (header_h + line_h * len(lines) + 10) + oi * (line_h - 4) - 2
+        row_y = base_y + overlay_header_h + oi * (small_line_h - 2) - 2
 
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
             adj_fill = ADJ_POS if adj_raw >= 0 else ADJ_NEG
-            angle_w  = draw.textbbox((0, 0), angle_txt, font=font)[2]
-            count_w  = draw.textbbox((0, 0), count_txt, font=font)[2]
-            total_w  = angle_w + count_w
-            adj_x    = actual_right - total_w
-            adj_x    = max(adj_x, actual_left)
-            draw.text((adj_x, row_y), angle_txt, font=font, fill=text_rgb)
-            draw.text((adj_x + angle_w, row_y), count_txt, font=font, fill=adj_fill)
+            angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
+            count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+            total_w = angle_w + count_w
+            if oi == 0:
+                adj_x = actual_right - total_w
+                first_adj_x = adj_x
+                first_adj_total_w = total_w
+            else:
+                adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
+            draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgb)
+            draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
 
         if oi < len(angle_error_overlays):
             err_txt = angle_error_overlays[oi][0]
-            draw.text((actual_left, row_y), err_txt, font=font, fill=text_rgb)
+            err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font)[2]
+            if oi == 0:
+                err_x = actual_left
+                first_err_x = err_x
+                first_err_w = err_txt_w
+            else:
+                err_x = first_err_x + (first_err_w - err_txt_w) // 2
+            draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgb)
+
+    if show_overlay_header and n_overlay_rows > 0:
+        hdr_y = base_y - 2
+        if angle_error_overlays and first_err_x is not None and first_err_w is not None:
+            err_hdr_w = draw.textbbox((0, 0), "Error", font=small_font)[2]
+            err_hdr_x = first_err_x + (first_err_w - err_hdr_w) // 2
+            draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=text_rgb)
+        if adj_count_overlays and first_adj_x is not None and first_adj_total_w is not None:
+            adj_hdr_w = draw.textbbox((0, 0), "Angle", font=small_font)[2]
+            adj_hdr_x = first_adj_x + (first_adj_total_w - adj_hdr_w) // 2
+            draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=text_rgb)
 
     return img
-
 PREVIEW_BLIND = {
     "evaluation": "HIGHROLL_GOOD",
     "xInNether": 312,
@@ -660,6 +701,7 @@ def _collect_eye_settings(vars_dict: dict) -> dict:
                                          vars_dict["ang_mode_combo"].get(), "angle_and_change"),
         "show_angle_adjustment_count":   vars_dict["adj_count_var"].get(),
         "show_angle_error":              vars_dict["angle_error_var"].get(),
+        "show_overlay_header":           vars_dict["overlay_header_var"].get(),
         "show_coords_based_on_dimension":vars_dict["dim_var"].get(),
         "text_order":                    order,
         "text_enabled":                  enabled,
@@ -921,18 +963,6 @@ def main():
     _ANG_KEY_FROM_DISPLAY = {v: k for k, v in _ANG_DISPLAY.items()}
     ang_mode_combo.set(_ANG_DISPLAY.get(ang_mode_var.get(), _ANG_DISPLAY["angle_and_change"]))
 
-    f3b = tk.Frame(e); f3b.pack(fill="x", pady=5)
-    adj_count_var = tk.BooleanVar(value=custom.get("show_angle_adjustment_count", False))
-    tk.Label(f3b, text="Show angle adjustment count", anchor="w").pack(side="left")
-    adj_count_checkbox = tk.Checkbutton(f3b, variable=adj_count_var)
-    adj_count_checkbox.pack(side="left", padx=5)
-
-    f3d = tk.Frame(e); f3d.pack(fill="x", pady=5)
-    angle_error_var = tk.BooleanVar(value=custom.get("show_angle_error", False))
-    tk.Label(f3d, text="Show angle error", anchor="w").pack(side="left")
-    angle_error_checkbox = tk.Checkbutton(f3d, variable=angle_error_var)
-    angle_error_checkbox.pack(side="left", padx=5)
-
     def on_adj_count_toggled(*_):
         if adj_count_var.get():
             messagebox.showwarning(
@@ -943,8 +973,6 @@ def main():
                 "but be aware that it's not 100% accurate.\n\n"
                 "This will be fixed in Ninjabrain Bot v1.5.2+."
             )
-
-    adj_count_var.trace_add("write", on_adj_count_toggled)
 
     f4 = tk.Frame(e); f4.pack(fill="x", pady=5)
     dim_var = tk.BooleanVar(value=custom.get("show_coords_based_on_dimension", False))
@@ -963,6 +991,26 @@ def main():
     tk.Label(f_error, text='Show "Could not determine" error', anchor="w").pack(side="left")
     error_checkbox = tk.Checkbutton(f_error, variable=error_var)
     error_checkbox.pack(side="left", padx=5)
+
+    f3b = tk.Frame(e); f3b.pack(fill="x", pady=5)
+    adj_count_var = tk.BooleanVar(value=custom.get("show_angle_adjustment_count", False))
+    tk.Label(f3b, text="Show angle adjustment count", anchor="w").pack(side="left")
+    adj_count_checkbox = tk.Checkbutton(f3b, variable=adj_count_var)
+    adj_count_checkbox.pack(side="left", padx=5)
+
+    adj_count_var.trace_add("write", on_adj_count_toggled)
+
+    f3d = tk.Frame(e); f3d.pack(fill="x", pady=5)
+    angle_error_var = tk.BooleanVar(value=custom.get("show_angle_error", False))
+    tk.Label(f3d, text="Show angle error", anchor="w").pack(side="left")
+    angle_error_checkbox = tk.Checkbutton(f3d, variable=angle_error_var)
+    angle_error_checkbox.pack(side="left", padx=5)
+
+    f3e = tk.Frame(e); f3e.pack(fill="x", pady=5)
+    overlay_header_var = tk.BooleanVar(value=custom.get("show_overlay_header", False))
+    tk.Label(f3e, text='Show headers for angle error and angle adjustment count', anchor="w").pack(side="left")
+    overlay_header_checkbox = tk.Checkbutton(f3e, variable=overlay_header_var)
+    overlay_header_checkbox.pack(side="left", padx=5)
 
     container = tk.LabelFrame(e,
                             text="Columns",
@@ -1115,6 +1163,7 @@ def main():
         "_ANG_KEY_FROM_DISPLAY":_ANG_KEY_FROM_DISPLAY,
         "adj_count_var":adj_count_var,
         "angle_error_var": angle_error_var,
+        "overlay_header_var": overlay_header_var,
         "dim_var":      dim_var,
     }
 
@@ -1149,6 +1198,7 @@ def main():
         ang_mode_combo.config(state="readonly" if en else "disabled")
         adj_count_checkbox.config(state="normal" if en else "disabled")
         angle_error_checkbox.config(state="normal" if en else "disabled")
+        overlay_header_checkbox.config(state="normal" if en else "disabled")
         dim_checkbox.config(state="normal" if en else "disabled")
         boat_checkbox.config(state="normal" if en else "disabled")
         error_checkbox.config(state="normal" if en else "disabled")
@@ -1201,6 +1251,7 @@ def main():
             "angle_display_mode": _ANG_KEY_FROM_DISPLAY.get(ang_mode_combo.get(), "angle_and_change"),
             "show_angle_adjustment_count": adj_count_var.get(),
             "show_angle_error": angle_error_var.get(),
+            "show_overlay_header": overlay_header_var.get(),
             "show_coords_based_on_dimension": dim_var.get(),
             "show_boat_icon": boat_var.get(),
             "show_error_message": error_var.get(),
@@ -1235,6 +1286,7 @@ def main():
                                                  _ANG_DISPLAY["angle_and_change"]))
             adj_count_var.set(custom["show_angle_adjustment_count"])
             angle_error_var.set(custom.get("show_angle_error", False))
+            overlay_header_var.set(custom.get("show_overlay_header", False))
             dim_var.set(custom["show_coords_based_on_dimension"])
             boat_var.set(custom["show_boat_icon"])
             error_var.set(custom["show_error_message"])
