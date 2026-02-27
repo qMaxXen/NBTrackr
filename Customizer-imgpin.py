@@ -302,6 +302,12 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     required_w = 10 + sum(col_widths) + 10
 
+    col_x = []
+    cx_acc = 10
+    for w in col_widths:
+        col_x.append(cx_acc)
+        cx_acc += w
+
     has_header = any(text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True))
     header_h = line_h if has_header else 0
     height = header_h + line_h * len(lines) + 10 + bottom_extra_h
@@ -350,7 +356,6 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     for w in col_widths:
         col_x.append(cx_acc)
         cx_acc += w
-    rightmost_x    = cx_acc
     _last_turn_pct = [0.0]
 
     for row, parts in enumerate(lines):
