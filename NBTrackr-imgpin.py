@@ -207,7 +207,12 @@ def generate_custom_pinned_image():
     blind_hide_after_enabled  = custom.get("blind_info_hide_after_enabled", False)
     font_size          = custom.get("font_size", 18)
     show_adj_count     = custom.get("show_angle_adjustment_count", False)
-    adj_count_position = custom.get("adj_count_position", "bottom_right")
+    ow_coords_format   = custom.get("overworld_coords_format", "four_four")
+    neg_coords_enabled = custom.get("negative_coords_color_enabled", False)
+    neg_coords_hex     = custom.get("negative_coords_color", "#CC6E72")
+    neg_coords_rgb     = hex_to_rgb(neg_coords_hex, fallback=(204, 110, 114))
+    show_angle_error   = custom.get("show_angle_error", False)
+    angle_display_mode = custom.get("angle_display_mode", "angle_and_change")
 
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
@@ -497,8 +502,9 @@ def generate_custom_pinned_image():
     show_dir    = custom.get("show_angle_direction", True)
 
     lines = []
-    adj_count_overlay = None 
-    for pred_idx, pred in enumerate(preds[:shown_count]): 
+    adj_count_overlays = []   
+    angle_error_overlays = [] 
+    for pred_idx, pred in enumerate(preds[:shown_count]):
         cx, cz = pred.get("chunkX"), pred.get("chunkZ")
         cert   = pred.get("certainty")
         dist   = pred.get("overworldDistance")
@@ -537,40 +543,55 @@ def generate_custom_pinned_image():
                 signed = ((tgt + 180) % 360) - 180
                 turn   = ((tgt - (h_ang % 360) + 180) % 360) - 180
 
-                parts.append(("text", f"{signed:.2f}"))
-                if show_dir:
+                show_ang    = angle_display_mode in ("angle_and_change", "angle_only")
+                show_change = angle_display_mode in ("angle_and_change", "change_only")
+
+                if show_ang:
+                    parts.append(("text", f"{signed:.2f}"))
+
+                if show_change:
                     arrow = "->" if turn > 0 else "<-"
-                    parts.append(("text", arrow))
+                    if show_ang:
+                        parts.append(("angle_space", " "))
+                    parts.append(("angle_arrow", arrow))
+                    parts.append(("angle_arrow_space", " "))
                     parts.append(("angle_adjust", f"{abs(turn):.1f}"))
 
-                if show_adj_count and eye_throws and pred_idx == 0:
-                    last_throw = eye_throws[-1]
-                    angle_with = last_throw.get("angle", 0.0)
-                    angle_without = last_throw.get("angleWithoutCorrection", 0.0)
-                    correction = angle_with - angle_without
-                    nb_settings = get_ninjabrainbot_settings()
-                    increments = calculate_correction_increments(correction, nb_settings)
-                    log("Angle adjustment count:", increments, "from correction:", correction, "(angle:", angle_with, "angleWithoutCorrection:", angle_without, ")")
-                    if increments != 0:
-                        sign = "+" if increments >= 0 else ""
-                        adj_count_overlay = (f"{angle_with:.2f}", f"{sign}{increments}", increments)
-
             elif key == "overworld_coords":
-                x, z = cx*16+4, cz*16+4
+                if ow_coords_format == "chunk":
+                    ox, oz = cx, cz
+                elif ow_coords_format == "eight_eight":
+                    ox, oz = cx*16+8, cz*16+8
+                else:  
+                    ox, oz = cx*16+4, cz*16+4
                 if show_coords_by_dim and in_nether:
-                    x, z = round(x/8), round(z/8)
-                parts.append(("text", f"({x}, {z})"))
+                    ox, oz = round(ox/8), round(oz/8)
+                parts.append(("coords", (ox, oz)))
 
             elif key == "nether_coords":
-                x, z = cx*16+4, cz*16+4
-                if show_coords_by_dim and not in_nether:
-                    x, z = cx*16+4, cz*16+4
-                else:
-                    x, z = round(x/8), round(z/8)
-                parts.append(("text", f"({x}, {z})"))
+                nx, nz = cx*16+4, cz*16+4
+                if not (show_coords_by_dim and not in_nether):
+                    nx, nz = round(nx/8), round(nz/8)
+                parts.append(("coords", (nx, nz)))
 
         if parts:
             lines.append(parts)
+
+        if eye_throws and pred_idx < len(eye_throws):
+            throw = eye_throws[pred_idx]
+            if show_adj_count:
+                angle_with    = throw.get("angle", 0.0)
+                angle_without = throw.get("angleWithoutCorrection", 0.0)
+                correction    = angle_with - angle_without
+                nb_settings   = get_ninjabrainbot_settings()
+                increments    = calculate_correction_increments(correction, nb_settings)
+                log("Throw", pred_idx, "adj count:", increments)
+                if increments != 0:
+                    sign = "+" if increments >= 0 else ""
+                    adj_count_overlays.append((f"{angle_with:.2f}", f"{sign}{increments}", increments))
+            if show_angle_error:
+                error_val = throw.get("error", 0.0)
+                angle_error_overlays.append((f"{error_val:.4f}",))
 
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
@@ -604,8 +625,11 @@ def generate_custom_pinned_image():
     line_h = ascent + descent + 6
 
     max_w  = 0
-    adj_count_extra_h = (line_h + 4) if adj_count_overlay else 0
-    height = line_h * len(lines) + 10 + adj_count_extra_h
+    n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays),
+                        1 if (adj_count_overlays or angle_error_overlays) else 0)
+    n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays))
+    bottom_extra_h = (line_h + 4) * n_bottom_rows
+    height = line_h * len(lines) + 10 + bottom_extra_h
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     required_w = 20
@@ -619,14 +643,12 @@ def generate_custom_pinned_image():
                     txt, _ = val
                 except Exception:
                     txt = str(val)
-            elif kind == "adj_count":
-                try:
-                    txt, _ = val
-                except Exception:
-                    txt = str(val)
+            elif kind == "coords":
+                cx_v, cz_v = val
+                txt = f"({cx_v}, {cz_v})"
             else:
                 txt = str(val)
-            pixel_gap = 6 if txt in ("->", "<-") else 14
+            pixel_gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
             row_w += dummy.textbbox((0, 0), txt, font=font)[2] + pixel_gap
         required_w = max(required_w, row_w)
 
@@ -634,9 +656,18 @@ def generate_custom_pinned_image():
     draw = ImageDraw.Draw(img)
 
     rightmost_x = 10 
+    _last_turn_pct = [0.0] 
     for row, parts in enumerate(lines):
         x = 10
         y = 5 + row * line_h
+
+        for _item in parts:
+            if _item[0] == "angle_adjust":
+                try:
+                    _last_turn_pct[0] = float(_item[1])
+                except Exception:
+                    pass
+                break
         for item in parts:
             kind = item[0]
             val = item[1]
@@ -652,13 +683,14 @@ def generate_custom_pinned_image():
                 except Exception:
                     fill = text_rgb
 
-            elif kind == "angle_adjust":
+            elif kind in ("angle_adjust", "angle_arrow", "angle_arrow_space", "angle_space"):
                 txt = val
-                try:
-                    pct = float(val)
-                    fill = gradient_color(pct)
-                except Exception:
-                    fill = text_rgb
+                if kind == "angle_adjust":
+                    try:
+                        _last_turn_pct[0] = float(val)
+                    except Exception:
+                        pass
+                fill = gradient_color(_last_turn_pct[0])
 
             elif kind == "distance":
                     try:
@@ -674,32 +706,60 @@ def generate_custom_pinned_image():
                             fill = (255, 165, 0)
                         else:
                             fill = text_rgb
+            elif kind == "coords":
+                cx_v, cz_v = val
+                paren_open  = "("
+                comma_space = ", "
+                paren_close = ")"
+                x_str = str(cx_v)
+                z_str = str(cz_v)
+                x_fill = (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb)
+                z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
+
+                draw.text((x, y), paren_open, font=font, fill=text_rgb)
+                x += draw.textbbox((0, 0), paren_open, font=font)[2]
+                draw.text((x, y), x_str, font=font, fill=x_fill)
+                x += draw.textbbox((0, 0), x_str, font=font)[2]
+                draw.text((x, y), comma_space, font=font, fill=text_rgb)
+                x += draw.textbbox((0, 0), comma_space, font=font)[2]
+                draw.text((x, y), z_str, font=font, fill=z_fill)
+                x += draw.textbbox((0, 0), z_str, font=font)[2]
+                draw.text((x, y), paren_close, font=font, fill=text_rgb)
+                pixel_gap = 14
+                x += draw.textbbox((0, 0), paren_close, font=font)[2] + pixel_gap
+                max_w = max(max_w, x)
+                rightmost_x = max(rightmost_x, x)
+                continue  
             else:
                 txt = str(val)
                 fill = text_rgb
 
             draw.text((x, y), txt, font=font, fill=fill)
-            pixel_gap = 6 if txt in ("->", "<-") else 14
+            pixel_gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
             w = draw.textbbox((0, 0), txt, font=font)[2] + pixel_gap
             x += w
 
         max_w = max(max_w, x)
         rightmost_x = max(rightmost_x, x)
 
-    if adj_count_overlay:
-        angle_txt, count_txt, adj_raw = adj_count_overlay
-        adj_fill = ADJ_COUNT_POSITIVE if adj_raw >= 0 else ADJ_COUNT_NEGATIVE
+    n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
+    for oi in range(n_overlay_rows):
+        row_y = (line_h * len(lines) + 10) + oi * (line_h + 4) + 2
 
-        angle_w = draw.textbbox((0, 0), angle_txt, font=font)[2]
-        count_w = draw.textbbox((0, 0), count_txt, font=font)[2]
-        total_w = angle_w + count_w
+        if oi < len(adj_count_overlays):
+            angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
+            adj_fill = ADJ_COUNT_POSITIVE if adj_raw >= 0 else ADJ_COUNT_NEGATIVE
+            angle_w  = draw.textbbox((0, 0), angle_txt, font=font)[2]
+            count_w  = draw.textbbox((0, 0), count_txt, font=font)[2]
+            total_w  = angle_w + count_w
+            adj_x    = rightmost_x - 14 - total_w
+            adj_x    = max(adj_x, 10)
+            draw.text((adj_x, row_y), angle_txt, font=font, fill=text_rgb)
+            draw.text((adj_x + angle_w, row_y), count_txt, font=font, fill=adj_fill)
 
-        adj_y = height - adj_count_extra_h + 2
-        adj_x = rightmost_x - 14 - total_w
-        adj_x = max(adj_x, 10)
-
-        draw.text((adj_x, adj_y), angle_txt, font=font, fill=text_rgb)
-        draw.text((adj_x + angle_w, adj_y), count_txt, font=font, fill=adj_fill)
+        if oi < len(angle_error_overlays):
+            err_txt = angle_error_overlays[oi][0]
+            draw.text((10, row_y), err_txt, font=font, fill=text_rgb)
     
     tmp = IMAGE_PATH + ".tmp.png"
     try:

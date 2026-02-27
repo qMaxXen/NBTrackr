@@ -41,8 +41,10 @@ CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 DEFAULT_CUSTOMIZATIONS = {
     "use_custom_pinned_image": False,
     "shown_measurements": 1,
-    "show_angle_direction": True,    
+    "overworld_coords_format": "four_four",
+    "angle_display_mode": "angle_and_change",    
     "show_angle_adjustment_count": False,
+    "show_angle_error": False,
     "show_coords_based_on_dimension": False,
     "show_boat_icon": True,           
     "show_error_message": True,       
@@ -53,6 +55,8 @@ DEFAULT_CUSTOMIZATIONS = {
     "font_size": 18,
     "background_color": "#FFFFFF",
     "text_color": "#000000",
+    "negative_coords_color_enabled": False,
+    "negative_coords_color": "#BA6669",
     "text_order": [
         "distance",
         "certainty_percentage",
@@ -163,6 +167,8 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     text_hex    = settings.get("text_color", "#000000")
     bg_rgb      = _hex_to_rgb(bg_hex, (255, 255, 255))
     text_rgb    = _hex_to_rgb(text_hex, (0, 0, 0))
+    neg_coords_enabled = settings.get("negative_coords_color_enabled", False)
+    neg_coords_rgb     = _hex_to_rgb(settings.get("negative_coords_color", "#BA6669"), (204, 110, 114))
     bg_rgba     = (*bg_rgb, 255)
 
     shown_count = settings.get("shown_measurements", 1)
@@ -170,11 +176,14 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                                                "overworld_coords", "nether_coords"])
     enabled     = settings.get("text_enabled", {k: True for k in order})
     show_dir    = settings.get("show_angle_direction", True)
-    show_adj    = settings.get("show_angle_adjustment_count", False)
+    show_adj          = settings.get("show_angle_adjustment_count", False)
+    show_angle_error  = settings.get("show_angle_error", False)
+    angle_display_mode = settings.get("angle_display_mode", "angle_and_change")
     in_nether   = PREVIEW_PLAYER["isInNether"]
     font_name   = settings.get("font_name", "")
     font_size   = settings.get("font_size", 18)
     show_coords_by_dim = settings.get("show_coords_based_on_dimension", False)
+    ow_coords_format   = settings.get("overworld_coords_format", "four_four")
 
     font = _load_preview_font(font_name, font_size)
     ascent, descent = font.getmetrics()
@@ -185,9 +194,10 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     player_z = PREVIEW_PLAYER["zInOverworld"]
     h_ang    = PREVIEW_PLAYER["horizontalAngle"]
 
-    adj_count_overlay = ("100.21", "+2", 2) if show_adj else None
-    adj_extra_h = (line_h + 4) if adj_count_overlay else 0
-
+    adj_count_overlays   = [("100.21", "+2", 2), ("98.43", "-1", -1)] if show_adj else []
+    angle_error_overlays = [("0.0002",), ("-0.0015",)] if show_angle_error else []
+    n_bottom_rows  = max(len(adj_count_overlays), len(angle_error_overlays))
+    bottom_extra_h = (line_h + 4) * n_bottom_rows
     lines = []
     for pred in preds:
         cx, cz = pred["chunkX"], pred["chunkZ"]
@@ -214,21 +224,34 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 tgt    = (math.degrees(math.atan2(dz, dx)) + 270) % 360
                 signed = ((tgt + 180) % 360) - 180
                 turn   = ((tgt - (h_ang % 360) + 180) % 360) - 180
-                parts.append(("text", f"{signed:.2f}"))
-                if show_dir:
+
+                show_ang    = angle_display_mode in ("angle_and_change", "angle_only")
+                show_change = angle_display_mode in ("angle_and_change", "change_only")
+
+                if show_ang:
+                    parts.append(("text", f"{signed:.2f}"))
+                if show_change:
                     arrow = "->" if turn > 0 else "<-"
-                    parts.append(("text", arrow))
+                    if show_ang:
+                        parts.append(("angle_space", " "))
+                    parts.append(("angle_arrow", arrow))
+                    parts.append(("angle_arrow_space", " "))
                     parts.append(("angle_adjust", f"{abs(turn):.1f}"))
             elif key == "overworld_coords":
-                x, z = cx * 16 + 4, cz * 16 + 4
+                if ow_coords_format == "chunk":
+                    ox, oz = cx, cz
+                elif ow_coords_format == "eight_eight":
+                    ox, oz = cx*16+8, cz*16+8
+                else:
+                    ox, oz = cx*16+4, cz*16+4
                 if show_coords_by_dim and in_nether:
-                    x, z = round(x / 8), round(z / 8)
-                parts.append(("text", f"({x}, {z})"))
+                    ox, oz = round(ox/8), round(oz/8)
+                parts.append(("coords", (ox, oz)))
             elif key == "nether_coords":
-                x, z = cx * 16 + 4, cz * 16 + 4
+                nx, nz = cx * 16 + 4, cz * 16 + 4
                 if not (show_coords_by_dim and not in_nether):
-                    x, z = round(x / 8), round(z / 8)
-                parts.append(("text", f"({x}, {z})"))
+                    nx, nz = round(nx / 8), round(nz / 8)
+                parts.append(("coords", (nx, nz)))
         if parts:
             lines.append(parts)
 
@@ -244,19 +267,33 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         row_w = 10
         for item in parts:
             kind, val = item
-            txt = val[0] if kind in ("distance", "adj_count") else str(val)
-            gap = 6 if txt in ("->", "<-") else 14
+            if kind == "distance":
+                txt = val[0]
+            elif kind == "coords":
+                cx_v, cz_v = val
+                txt = f"({cx_v}, {cz_v})"
+            else:
+                txt = str(val)
+            gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
             row_w += dummy.textbbox((0, 0), txt, font=font)[2] + gap
         required_w = max(required_w, row_w)
 
-    height = line_h * len(lines) + 10 + adj_extra_h
+    height = line_h * len(lines) + 10 + bottom_extra_h
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
 
-    rightmost_x = 10
+    rightmost_x    = 10
+    _last_turn_pct = [0.0]
     for row, parts in enumerate(lines):
         x = 10
         y = 5 + row * line_h
+        for _item in parts:
+            if _item[0] == "angle_adjust":
+                try:
+                    _last_turn_pct[0] = float(_item[1])
+                except Exception:
+                    pass
+                break
         for item in parts:
             kind, val = item
             txt  = ""
@@ -267,36 +304,60 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     fill = _certainty_color(float(txt.rstrip("%")))
                 except Exception:
                     pass
-            elif kind == "angle_adjust":
+            elif kind in ("angle_adjust", "angle_arrow", "angle_arrow_space", "angle_space"):
                 txt = val
-                try:
-                    fill = _gradient_color(float(val))
-                except Exception:
-                    pass
+                if kind == "angle_adjust":
+                    try:
+                        _last_turn_pct[0] = float(val)
+                    except Exception:
+                        pass
+                fill = _gradient_color(_last_turn_pct[0])
             elif kind == "distance":
                 txt, dval = val
                 fill = (255, 165, 0) if (not in_nether and dval <= 193) else text_rgb
+            elif kind == "coords":
+                cx_v, cz_v = val
+                x_str = str(cx_v)
+                z_str = str(cz_v)
+                x_fill = (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb)
+                z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
+                draw.text((x, y), "(", font=font, fill=text_rgb)
+                x += draw.textbbox((0, 0), "(", font=font)[2]
+                draw.text((x, y), x_str, font=font, fill=x_fill)
+                x += draw.textbbox((0, 0), x_str, font=font)[2]
+                draw.text((x, y), ", ", font=font, fill=text_rgb)
+                x += draw.textbbox((0, 0), ", ", font=font)[2]
+                draw.text((x, y), z_str, font=font, fill=z_fill)
+                x += draw.textbbox((0, 0), z_str, font=font)[2]
+                draw.text((x, y), ")", font=font, fill=text_rgb)
+                x += draw.textbbox((0, 0), ")", font=font)[2] + 14
+                rightmost_x = max(rightmost_x, x)
+                continue
             else:
                 txt = str(val)
             draw.text((x, y), txt, font=font, fill=fill)
-            gap = 6 if txt in ("->", "<-") else 14
+            gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
             x += draw.textbbox((0, 0), txt, font=font)[2] + gap
         rightmost_x = max(rightmost_x, x)
 
-    if adj_count_overlay:
-        angle_txt, count_txt, adj_raw = adj_count_overlay
-        adj_fill = ADJ_POS if adj_raw >= 0 else ADJ_NEG
+    n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
+    for oi in range(n_overlay_rows):
+        row_y = (line_h * len(lines) + 10) + oi * (line_h + 4) + 2
 
-        angle_w = draw.textbbox((0, 0), angle_txt, font=font)[2]
-        count_w = draw.textbbox((0, 0), count_txt, font=font)[2]
-        total_w = angle_w + count_w
+        if oi < len(adj_count_overlays):
+            angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
+            adj_fill = ADJ_POS if adj_raw >= 0 else ADJ_NEG
+            angle_w  = draw.textbbox((0, 0), angle_txt, font=font)[2]
+            count_w  = draw.textbbox((0, 0), count_txt, font=font)[2]
+            total_w  = angle_w + count_w
+            adj_x    = rightmost_x - 14 - total_w
+            adj_x    = max(adj_x, 10)
+            draw.text((adj_x, row_y), angle_txt, font=font, fill=text_rgb)
+            draw.text((adj_x + angle_w, row_y), count_txt, font=font, fill=adj_fill)
 
-        adj_y = height - adj_extra_h + 2
-        adj_x = rightmost_x - 14 - total_w
-        adj_x = max(adj_x, 10)
-
-        draw.text((adj_x, adj_y), angle_txt, font=font, fill=text_rgb)
-        draw.text((adj_x + angle_w, adj_y), count_txt, font=font, fill=adj_fill)
+        if oi < len(angle_error_overlays):
+            err_txt = angle_error_overlays[oi][0]
+            draw.text((10, row_y), err_txt, font=font, fill=text_rgb)
 
     return img
 
@@ -462,11 +523,17 @@ def _collect_eye_settings(vars_dict: dict) -> dict:
     return {
         "background_color":              vars_dict["bg_var"].get(),
         "text_color":                    vars_dict["text_var"].get(),
+        "negative_coords_color_enabled": vars_dict["neg_coords_enabled_var"].get(),
+        "negative_coords_color":         vars_dict["neg_coords_color_var"].get(),
         "font_name":                     font_name,
         "font_size":                     font_size,
         "shown_measurements":            vars_dict["shown_var"].get(),
-        "show_angle_direction":          vars_dict["ang_var"].get(),
+        "overworld_coords_format": vars_dict["_OW_COORDS_KEY_FROM_DISPLAY"].get(
+                                       vars_dict["ow_coords_var"].get(), "four_four"),
+        "angle_display_mode":            vars_dict["_ANG_KEY_FROM_DISPLAY"].get(
+                                         vars_dict["ang_mode_combo"].get(), "angle_and_change"),
         "show_angle_adjustment_count":   vars_dict["adj_count_var"].get(),
+        "show_angle_error":              vars_dict["angle_error_var"].get(),
         "show_coords_based_on_dimension":vars_dict["dim_var"].get(),
         "text_order":                    order,
         "text_enabled":                  enabled,
@@ -638,6 +705,29 @@ def main():
     text_choose_btn = tk.Button(f_text, text="Choose", command=lambda: pick_color(text_var))
     text_choose_btn.pack(side="left")
 
+    f_neg = tk.Frame(g); f_neg.pack(fill="x", pady=(2, 5))
+    neg_coords_enabled_var = tk.BooleanVar(value=custom.get("negative_coords_color_enabled", False))
+    tk.Checkbutton(f_neg, variable=neg_coords_enabled_var,
+                   relief="flat", bd=0).pack(side="left")
+    tk.Label(f_neg, text="Display negative coords in a different color",
+             anchor="w").pack(side="left")
+    neg_coords_color_var = tk.StringVar(
+        value=custom.get("negative_coords_color", DEFAULT_CUSTOMIZATIONS["negative_coords_color"]))
+    neg_coords_entry = tk.Entry(f_neg, textvariable=neg_coords_color_var, width=10)
+    neg_coords_entry.pack(side="left", padx=5)
+    neg_coords_choose_btn = tk.Button(f_neg, text="Choose",
+                                      command=lambda: pick_color(neg_coords_color_var))
+    neg_coords_choose_btn.pack(side="left")
+
+    def _update_neg_coords_state(*_):
+        en_main = use_var.get()
+        en_neg  = neg_coords_enabled_var.get() and en_main
+        neg_coords_entry.config(state="normal" if en_neg else "disabled")
+        neg_coords_choose_btn.config(state="normal" if en_neg else "disabled")
+
+    neg_coords_enabled_var.trace_add("write", _update_neg_coords_state)
+    _update_neg_coords_state()
+
     e = tk.Frame(tab_eye)
     e.pack(padx=10, pady=10, fill="x")
 
@@ -651,19 +741,55 @@ def main():
     cb_shown = ttk.Combobox(f2, textvariable=shown_var, state="readonly", width=5)
     cb_shown['values'] = [1, 2, 3, 4, 5]
     cb_shown.pack(side="left", padx=5)
-    cb_shown.bind("<<ComboboxSelected>>", lambda e: e.widget.selection_clear())
+    cb_shown.bind("<<ComboboxSelected>>", lambda ev: ev.widget.selection_clear())
+
+    _OW_COORDS_DISPLAY = {
+        "four_four":  "(4, 4)",
+        "eight_eight":"(8, 8)",
+        "chunk":      "Chunk",
+    }
+    _OW_COORDS_KEY_FROM_DISPLAY = {v: k for k, v in _OW_COORDS_DISPLAY.items()}
+    f2b = tk.Frame(e); f2b.pack(fill="x", pady=5)
+    tk.Label(f2b, text="Overworld coords:", width=30, anchor="w").pack(side="left")
+    ow_coords_var = tk.StringVar(
+        value=_OW_COORDS_DISPLAY.get(custom.get("overworld_coords_format", "four_four"), "(4, 4)"))
+    ow_coords_combo = ttk.Combobox(f2b, textvariable=ow_coords_var, state="readonly", width=12)
+    ow_coords_combo['values'] = list(_OW_COORDS_DISPLAY.values())
+    ow_coords_combo.pack(side="left", padx=5)
+    ow_coords_combo.bind("<<ComboboxSelected>>", lambda ev: ev.widget.selection_clear())
 
     f3 = tk.Frame(e); f3.pack(fill="x", pady=5)
-    ang_var = tk.BooleanVar(value=custom.get("show_angle_direction", False))
-    tk.Label(f3, text="Show angle direction (e.g. <- 24.3)", anchor="w").pack(side="left")
-    ang_checkbox = tk.Checkbutton(f3, variable=ang_var)
-    ang_checkbox.pack(side="left", padx=5)
+    tk.Label(f3, text="Show angle", width=30, anchor="w").pack(side="left")
+    ang_mode_var = tk.StringVar(value=custom.get("angle_display_mode", "angle_and_change"))
+    ang_mode_combo = ttk.Combobox(f3, textvariable=ang_mode_var, state="readonly", width=34)
+    ang_mode_combo['values'] = [
+        "angle_and_change",
+        "angle_only",
+        "change_only",
+    ]
+    ang_mode_combo.pack(side="left", padx=5)
+    ang_mode_combo.bind("<<ComboboxSelected>>", lambda ev: ev.widget.selection_clear())
+
+    _ANG_DISPLAY = {
+        "angle_and_change": "Show angle and angle change",
+        "angle_only":       "Show only the angle (e.g. 35.53)",
+        "change_only":      "Show only the angle change (e.g. <- 8.4)",
+    }
+    ang_mode_combo['values'] = list(_ANG_DISPLAY.values())
+    _ANG_KEY_FROM_DISPLAY = {v: k for k, v in _ANG_DISPLAY.items()}
+    ang_mode_combo.set(_ANG_DISPLAY.get(ang_mode_var.get(), _ANG_DISPLAY["angle_and_change"]))
 
     f3b = tk.Frame(e); f3b.pack(fill="x", pady=5)
     adj_count_var = tk.BooleanVar(value=custom.get("show_angle_adjustment_count", False))
     tk.Label(f3b, text="Show angle adjustment count", anchor="w").pack(side="left")
     adj_count_checkbox = tk.Checkbutton(f3b, variable=adj_count_var)
     adj_count_checkbox.pack(side="left", padx=5)
+
+    f3d = tk.Frame(e); f3d.pack(fill="x", pady=5)
+    angle_error_var = tk.BooleanVar(value=custom.get("show_angle_error", False))
+    tk.Label(f3d, text="Show angle error", anchor="w").pack(side="left")
+    angle_error_checkbox = tk.Checkbutton(f3d, variable=angle_error_var)
+    angle_error_checkbox.pack(side="left", padx=5)
 
     def on_adj_count_toggled(*_):
         if adj_count_var.get():
@@ -807,9 +933,15 @@ def main():
         "font_size_var":font_size_var,
         "bg_var":       bg_var,
         "text_var":     text_var,
+        "neg_coords_enabled_var":  neg_coords_enabled_var,
+        "neg_coords_color_var":    neg_coords_color_var,
         "shown_var":    shown_var,
-        "ang_var":      ang_var,
+        "ow_coords_var":             ow_coords_var,
+        "_OW_COORDS_KEY_FROM_DISPLAY": _OW_COORDS_KEY_FROM_DISPLAY,
+        "ang_mode_combo":ang_mode_combo,
+        "_ANG_KEY_FROM_DISPLAY":_ANG_KEY_FROM_DISPLAY,
         "adj_count_var":adj_count_var,
+        "angle_error_var": angle_error_var,
         "dim_var":      dim_var,
     }
 
@@ -837,9 +969,13 @@ def main():
         text_entry.config(state=color_state)
         text_choose_btn.config(state=color_state)
 
+        _update_neg_coords_state()
+
         cb_shown.config(state="readonly" if en else "disabled")
-        ang_checkbox.config(state="normal" if en else "disabled")
+        ow_coords_combo.config(state="readonly" if en else "disabled")
+        ang_mode_combo.config(state="readonly" if en else "disabled")
         adj_count_checkbox.config(state="normal" if en else "disabled")
+        angle_error_checkbox.config(state="normal" if en else "disabled")
         dim_checkbox.config(state="normal" if en else "disabled")
         boat_checkbox.config(state="normal" if en else "disabled")
         error_checkbox.config(state="normal" if en else "disabled")
@@ -888,8 +1024,10 @@ def main():
         custom.update({
             "use_custom_pinned_image": use_var.get(),
             "shown_measurements": shown_var.get(),
-            "show_angle_direction": ang_var.get(),
+            "overworld_coords_format": _OW_COORDS_KEY_FROM_DISPLAY.get(ow_coords_var.get(), "four_four"),
+            "angle_display_mode": _ANG_KEY_FROM_DISPLAY.get(ang_mode_combo.get(), "angle_and_change"),
             "show_angle_adjustment_count": adj_count_var.get(),
+            "show_angle_error": angle_error_var.get(),
             "show_coords_based_on_dimension": dim_var.get(),
             "show_boat_icon": boat_var.get(),
             "show_error_message": error_var.get(),
@@ -900,6 +1038,8 @@ def main():
             "font_size": font_size_var.get(),
             "background_color": bg_val,
             "text_color": txt_val,
+            "negative_coords_color_enabled": neg_coords_enabled_var.get(),
+            "negative_coords_color": neg_coords_color_var.get().strip(),
             "text_order": order,
             "text_enabled": {k: var.get() for k, var in check_vars.items()},
             "debug_mode": debug_var.get(),
@@ -916,8 +1056,11 @@ def main():
             custom.update(DEFAULT_CUSTOMIZATIONS)
             use_var.set(custom["use_custom_pinned_image"])
             shown_var.set(custom["shown_measurements"])
-            ang_var.set(custom["show_angle_direction"])
+            ow_coords_var.set(_OW_COORDS_DISPLAY.get(custom.get("overworld_coords_format", "four_four"), "(4, 4)"))
+            ang_mode_combo.set(_ANG_DISPLAY.get(custom.get("angle_display_mode", "angle_and_change"),
+                                                 _ANG_DISPLAY["angle_and_change"]))
             adj_count_var.set(custom["show_angle_adjustment_count"])
+            angle_error_var.set(custom.get("show_angle_error", False))
             dim_var.set(custom["show_coords_based_on_dimension"])
             boat_var.set(custom["show_boat_icon"])
             error_var.set(custom["show_error_message"])
@@ -928,6 +1071,10 @@ def main():
             blind_hide_after_enabled_var.set(custom.get("blind_info_hide_after_enabled", False))
             bg_var.set(custom["background_color"])
             text_var.set(custom["text_color"])
+            neg_coords_enabled_var.set(custom.get("negative_coords_color_enabled", False))
+            neg_coords_color_var.set(custom.get("negative_coords_color",
+                                                  DEFAULT_CUSTOMIZATIONS["negative_coords_color"]))
+            _update_neg_coords_state()
             debug_var.set(custom["debug_mode"])
             idle_rate_var.set(custom["idle_api_polling_rate"])
             max_rate_var.set(custom["max_api_polling_rate"])
