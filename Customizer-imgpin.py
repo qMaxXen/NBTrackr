@@ -459,6 +459,11 @@ def main():
             messagebox.showerror("Invalid Value", "Max API polling rate must be a positive number.")
             return
 
+        if idle_val < max_val:
+            messagebox.showerror("Invalid Value",
+                                 "Idle API polling rate should be greater than or equal to Max API polling rate.")
+            return
+
         custom.update({
             "use_custom_pinned_image": use_var.get(),
             "shown_measurements": shown_var.get(),
