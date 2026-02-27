@@ -44,13 +44,13 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 
    ```bash
    cd <extracted-folder>
-   pip3 install -r requirements.txt
+   pip install -r requirements.txt
    ```
 > [!TIP]
-> Getting the `PEP 668 (externally-managed-environment)` error after running `pip3 install -r requirements.txt`? Create a Python virtual environment:
+> Getting the `PEP 668 (externally-managed-environment)` error after running `pip install -r requirements.txt`? Create a Python virtual environment:
 > ```bash
 > # Make sure you are in the extracted folder
-> python3 -m venv venv
+> python -m venv venv
 > source venv/bin/activate
 > pip install -r requirements.txt
 > ```
@@ -60,8 +60,8 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > ```
 
 6. Now run the script with the following command in the terminal:
-   - For desktop notifications: `python3 NBTrackr-Notif.py`
-   - For pinned image overlay: `python3 NBTrackr-imgpin.py`
+   - For desktop notifications: `python NBTrackr-Notif.py`
+   - For pinned image overlay: `python NBTrackr-imgpin.py`
 > [!NOTE]
 > On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on first launch. This behavior depends
 > on your window manager or desktop environment. On X11, it should not steal focus. To unfocus it, simply switch to a different
