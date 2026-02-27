@@ -836,10 +836,12 @@ def main():
 
     f_neg = tk.Frame(g); f_neg.pack(fill="x", pady=(2, 5))
     neg_coords_enabled_var = tk.BooleanVar(value=custom.get("negative_coords_color_enabled", False))
-    tk.Checkbutton(f_neg, variable=neg_coords_enabled_var,
-                   relief="flat", bd=0).pack(side="left")
-    tk.Label(f_neg, text="Display negative coords in a different color",
-             anchor="w").pack(side="left")
+    neg_coords_checkbox = tk.Checkbutton(f_neg, variable=neg_coords_enabled_var,
+                                         relief="flat", bd=0)
+    neg_coords_checkbox.pack(side="left")
+    neg_coords_label = tk.Label(f_neg, text="Display negative coords in a different color",
+                                anchor="w")
+    neg_coords_label.pack(side="left", padx=(4,0))
     neg_coords_color_var = tk.StringVar(
         value=custom.get("negative_coords_color", DEFAULT_CUSTOMIZATIONS["negative_coords_color"]))
     neg_coords_entry = tk.Entry(f_neg, textvariable=neg_coords_color_var, width=10)
@@ -850,7 +852,18 @@ def main():
 
     def _update_neg_coords_state(*_):
         en_main = use_var.get()
-        en_neg  = neg_coords_enabled_var.get() and en_main
+
+        try:
+            neg_coords_checkbox.config(state="normal" if en_main else "disabled")
+        except NameError:
+            pass
+
+        try:
+            neg_coords_label.config(fg="#000000" if en_main else "#777777")
+        except NameError:
+            pass
+
+        en_neg = neg_coords_enabled_var.get() and en_main
         neg_coords_entry.config(state="normal" if en_neg else "disabled")
         neg_coords_choose_btn.config(state="normal" if en_neg else "disabled")
 
