@@ -306,28 +306,21 @@ if __name__ == "__main__":
 # --- Check for updates ---
     print(f"NBTrackr version: {APP_VERSION}")
 
-    def check_for_update(current_version):
-        latest_version = get_latest_github_release_version()
-        if latest_version and latest_version != current_version:
-            return latest_version
-        return None
-
-
-    latest = check_for_update(APP_VERSION)
-    if latest:
-        print(f"\n=== New Release Available! ===")
-        print(f"Version: {latest}")
-        print("You should update to the latest version!")
-        print("1) Continue with the current version")
-        print("2) Automatically update to the latest version")
-        choice = input("Enter choice [1/2]: ").strip()
-        print()
-
-        if choice == "2":
-            check_and_update(APP_VERSION)
-        else:
-            print("Skipping update. Continuing with current version", APP_VERSION, "\n")
-
+    print(Fore.YELLOW + """
+    ╔══════════════════════════════════════════════════════════════╗
+    ║                  DEPRECATION NOTICE                          ║
+    ║                                                              ║
+    ║  NBTrackr-Notif (desktop notifications method) is deprecated ║
+    ║  and will NOT be included in future releases.                ║
+    ║                                                              ║
+    ║  Please switch to NBTrackr-imgpin, which is actively         ║
+    ║  maintained and has significantly more features.             ║
+    ║                                                              ║
+    ║  This version will continue to run but will no longer        ║
+    ║  receive updates or bug fixes.                               ║
+    ╚══════════════════════════════════════════════════════════════╝
+    """ + Style.RESET_ALL)
+    input("Press Enter to continue...\n")
 # --------- END ----
     last_boat_state_notified = None
     last_red_boat_notify_time = 0
