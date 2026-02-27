@@ -552,8 +552,7 @@ def generate_custom_pinned_image():
 
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
-                    parts.append(("angle_arrow", arrow))
-                    parts.append(("angle_adjust", f"{abs(turn):.1f}"))
+                    parts.append(("angle_change", f"{arrow} {abs(turn):.1f}"))
 
             elif key == "overworld_coords":
                 if ow_coords_format == "chunk":
@@ -644,7 +643,7 @@ def generate_custom_pinned_image():
             txt = f"({cx_v}, {cz_v})"
         else:
             txt = str(val)
-        gap = 6 if kind == "angle_arrow" else 14
+        gap = 14
         return dummy.textbbox((0, 0), txt, font=font)[2] + gap, txt
 
     col_widths = [] 
@@ -673,9 +672,9 @@ def generate_custom_pinned_image():
         y = 5 + row * line_h
 
         for _item in parts:
-            if _item[0] == "angle_adjust":
+            if _item[0] == "angle_change":
                 try:
-                    _last_turn_pct[0] = float(_item[1])
+                    _last_turn_pct[0] = float(_item[1].strip().split()[-1])
                 except Exception:
                     pass
                 break
@@ -699,13 +698,12 @@ def generate_custom_pinned_image():
                     fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
-            elif kind in ("angle_arrow", "angle_adjust"):
+            elif kind == "angle_change":
                 txt = val
-                if kind == "angle_adjust":
-                    try:
-                        _last_turn_pct[0] = float(val)
-                    except Exception:
-                        pass
+                try:
+                    _last_turn_pct[0] = float(txt.strip().split()[-1])
+                except Exception:
+                    pass
                 fill = gradient_color(_last_turn_pct[0])
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
