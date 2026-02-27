@@ -779,7 +779,8 @@ def check_and_update(current_version):
             print("-" * 40)
         print(f"\n[Updater] Update completed. New version extracted to:")
         print(f"    {folder_path}")
-        print("[Updater] Please run the script from the new folder.")
+        print("[Updater] To finish setup, navigate to the new folder and run:")
+        print("    ./install.sh")
         sys.exit(0)
     except Exception as e:
         print(f"[Updater] Update failed: {e}")
