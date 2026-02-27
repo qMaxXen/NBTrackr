@@ -497,10 +497,18 @@ def generate_custom_pinned_image():
     h_ang      = player_pos.get("horizontalAngle")
     in_nether  = player_pos.get("isInNether", False)
 
-    shown_count = custom.get("shown_measurements", 5)
-    order       = custom.get("text_order", [])
-    enabled     = custom.get("text_enabled", {})
-    show_dir    = custom.get("show_angle_direction", True)
+    shown_count  = custom.get("shown_measurements", 5)
+    order        = custom.get("text_order", [])
+    enabled      = custom.get("text_enabled", {})
+    show_dir     = custom.get("show_angle_direction", True)
+    text_header  = custom.get("text_header", {})
+    HEADER_LABELS = {
+        "distance": "Dist.",
+        "certainty_percentage": "%",
+        "angle": "Angle",
+        "overworld_coords": "Chunk" if ow_coords_format == "chunk" else "Location",
+        "nether_coords": "Nether",
+    }
 
     lines = []
     adj_count_overlays = []   
@@ -623,12 +631,13 @@ def generate_custom_pinned_image():
     ascent, descent = font.getmetrics()
     line_h = ascent + descent + 6
 
+    has_header = any(text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True))
+    header_h = line_h if has_header else 0
+
     max_w  = 0
-    n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays),
-                        1 if (adj_count_overlays or angle_error_overlays) else 0)
     n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays))
-    bottom_extra_h = (line_h + 4) * n_bottom_rows
-    height = line_h * len(lines) + 10 + bottom_extra_h
+    bottom_extra_h = (line_h - 4) * n_bottom_rows
+    height = header_h + line_h * len(lines) + 10 + bottom_extra_h
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
 
@@ -644,7 +653,7 @@ def generate_custom_pinned_image():
         elif kind == "angle_change":
             arrow, num = val
             txt = arrow + num
-            w = dummy.textbbox((0, 0), arrow, font=font)[2] + 6 + dummy.textbbox((0, 0), num, font=font)[2]
+            w = dummy.textbbox((0, 0), arrow, font=font)[2] + 5 + dummy.textbbox((0, 0), num, font=font)[2]
             return w + 14, txt
         else:
             txt = str(val)
@@ -670,11 +679,48 @@ def generate_custom_pinned_image():
     for w in col_widths:
         col_x.append(cx_acc)
         cx_acc += w
-    rightmost_x = cx_acc 
+    rightmost_x = cx_acc
     _last_turn_pct = [0.0]
 
+    if has_header:
+        visible_keys = [k for k in order if enabled.get(k, True)]
+        key_slots = {}
+        slot = 0
+        for key in visible_keys:
+            if key == "angle":
+                slots = []
+                if angle_display_mode in ("angle_and_change", "angle_only"):
+                    slots.append(slot)
+                    slot += 1
+                if angle_display_mode in ("angle_and_change", "change_only"):
+                    slots.append(slot)
+                    slot += 1
+                key_slots[key] = slots
+            else:
+                key_slots[key] = [slot]
+                slot += 1
+        for key in visible_keys:
+            if text_header.get(key, "Text") != "Text":
+                continue
+            slots = key_slots.get(key, [])
+            if not slots:
+                continue
+            first_slot = slots[0]
+            last_slot = slots[-1]
+            if first_slot >= len(col_x) or last_slot >= len(col_widths):
+                continue
+            hdr_txt = HEADER_LABELS.get(key, "")
+            if not hdr_txt:
+                continue
+            span_start = col_x[first_slot]
+            span_end = col_x[last_slot] + col_widths[last_slot]
+            span_w = span_end - span_start
+            tw = draw.textbbox((0, 0), hdr_txt, font=font)[2]
+            hx = span_start + (span_w - tw) // 2
+            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgb)
+
     for row, parts in enumerate(lines):
-        y = 5 + row * line_h
+        y = 5 + header_h + row * line_h
 
         for _item in parts:
             if _item[0] == "angle_change":
@@ -711,10 +757,10 @@ def generate_custom_pinned_image():
                     pass
                 fill = gradient_color(_last_turn_pct[0])
                 arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 3 + draw.textbbox((0, 0), num, font=font)[2]
+                total_w = arrow_w + 5 + draw.textbbox((0, 0), num, font=font)[2]
                 col_start = col_left + (col_w - total_w) // 2
                 draw.text((col_start, y), arrow, font=font, fill=fill)
-                draw.text((col_start + arrow_w + 3, y), num, font=font, fill=fill)
+                draw.text((col_start + arrow_w + 5, y), num, font=font, fill=fill)
 
             elif kind == "distance":
                 try:
@@ -797,7 +843,7 @@ def generate_custom_pinned_image():
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     for oi in range(n_overlay_rows):
-        row_y = (line_h * len(lines) + 10) + oi * (line_h - 4) - 2
+        row_y = (header_h + line_h * len(lines) + 10) + oi * (line_h - 4) - 2
 
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]

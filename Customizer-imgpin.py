@@ -71,6 +71,13 @@ DEFAULT_CUSTOMIZATIONS = {
         "overworld_coords": True,
         "nether_coords": True
     },
+    "text_header": {
+        "distance": "Text",
+        "certainty_percentage": "Text",
+        "angle": "Text",
+        "overworld_coords": "Text",
+        "nether_coords": "Text"
+    },
     "debug_mode": False,
     "idle_api_polling_rate": 0.3,
     "max_api_polling_rate": 0.15
@@ -190,6 +197,14 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     font = _load_preview_font(font_name, font_size)
     ascent, descent = font.getmetrics()
     line_h = ascent + descent + 6
+    text_header = settings.get("text_header", {})
+    HEADER_LABELS = {
+        "distance": "Dist.",
+        "certainty_percentage": "%",
+        "angle": "Angle",
+        "overworld_coords": "Chunk" if settings.get("overworld_coords_format", "four_four") == "chunk" else "Location",
+        "nether_coords": "Nether",
+    }
 
     preds = PREVIEW_EYE_DATA[:shown_count]
     player_x = PREVIEW_PLAYER["xInOverworld"]
@@ -270,7 +285,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             txt = f"({cx_v}, {cz_v})"
         elif kind == "angle_change":
             arrow, num = val
-            return dummy.textbbox((0, 0), arrow, font=font)[2] + 3 + dummy.textbbox((0, 0), num, font=font)[2] + 14
+            return dummy.textbbox((0, 0), arrow, font=font)[2] + 5 + dummy.textbbox((0, 0), num, font=font)[2] + 14
         else:
             txt = str(val)
         gap = 14
@@ -287,9 +302,48 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     required_w = 10 + sum(col_widths) + 10
 
-    height = line_h * len(lines) + 10 + bottom_extra_h
+    has_header = any(text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True))
+    header_h = line_h if has_header else 0
+    height = header_h + line_h * len(lines) + 10 + bottom_extra_h
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
+
+    if has_header:
+        visible_keys = [k for k in order if enabled.get(k, True)]
+        key_slots = {}
+        slot = 0
+        for key in visible_keys:
+            if key == "angle":
+                slots = []
+                if angle_display_mode in ("angle_and_change", "angle_only"):
+                    slots.append(slot)
+                    slot += 1
+                if angle_display_mode in ("angle_and_change", "change_only"):
+                    slots.append(slot)
+                    slot += 1
+                key_slots[key] = slots
+            else:
+                key_slots[key] = [slot]
+                slot += 1
+        for key in visible_keys:
+            if text_header.get(key, "Text") != "Text":
+                continue
+            slots = key_slots.get(key, [])
+            if not slots:
+                continue
+            first_slot = slots[0]
+            last_slot = slots[-1]
+            if first_slot >= len(col_x) or last_slot >= len(col_widths):
+                continue
+            hdr_txt = HEADER_LABELS.get(key, "")
+            if not hdr_txt:
+                continue
+            span_start = col_x[first_slot]
+            span_end = col_x[last_slot] + col_widths[last_slot]
+            span_w = span_end - span_start
+            tw = draw.textbbox((0, 0), hdr_txt, font=font)[2]
+            hx = span_start + (span_w - tw) // 2
+            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgb)
 
     col_x = []
     cx_acc = 10
@@ -300,7 +354,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     _last_turn_pct = [0.0]
 
     for row, parts in enumerate(lines):
-        y = 5 + row * line_h
+        y = 5 + header_h + row * line_h
 
         for _item in parts:
             if _item[0] == "angle_change":
@@ -335,10 +389,10 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     pass
                 fill = _gradient_color(_last_turn_pct[0])
                 arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 3 + draw.textbbox((0, 0), num, font=font)[2]
+                total_w = arrow_w + 5 + draw.textbbox((0, 0), num, font=font)[2]
                 col_start = col_left + (col_w - total_w) // 2
                 draw.text((col_start, y), arrow, font=font, fill=fill)
-                draw.text((col_start + arrow_w + 3, y), num, font=font, fill=fill)
+                draw.text((col_start + arrow_w + 5, y), num, font=font, fill=fill)
 
             elif kind == "distance":
                 txt, dval = val
@@ -409,7 +463,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     for oi in range(n_overlay_rows):
-        row_y = (line_h * len(lines) + 10) + oi * (line_h - 4) - 2
+        row_y = (header_h + line_h * len(lines) + 10) + oi * (line_h - 4) - 2
 
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
@@ -604,6 +658,9 @@ def _collect_eye_settings(vars_dict: dict) -> dict:
         "show_coords_based_on_dimension":vars_dict["dim_var"].get(),
         "text_order":                    order,
         "text_enabled":                  enabled,
+        "text_header":                   {k: v.get() for k, v in vars_dict["header_vars"].items()},
+        "overworld_coords_format":       vars_dict["_OW_COORDS_KEY_FROM_DISPLAY"].get(
+                                             vars_dict["ow_coords_var"].get(), "four_four"),
     }
 
 
@@ -889,13 +946,22 @@ def main():
     error_checkbox = tk.Checkbutton(f_error, variable=error_var)
     error_checkbox.pack(side="left", padx=5)
 
-    tk.Label(e, text="Text Elements:", font=("Helvetica", 12)).pack(pady=(15, 5), anchor="w")
+    container = tk.LabelFrame(e,
+                            text="Columns",
+                            font=("Helvetica", 12),
+                            bd=1,                
+                            relief="solid",     
+                            padx=6, pady=6)    
+    container.pack(fill="x", padx=0, pady=(8, 0))  
 
     order = custom.get("text_order", DEFAULT_CUSTOMIZATIONS["text_order"].copy())
     enabled = custom.get("text_enabled", DEFAULT_CUSTOMIZATIONS["text_enabled"].copy())
-    text_frame = tk.Frame(e)
-    text_frame.pack(fill="x", padx=10)
+
+    text_frame = tk.Frame(container)
+    text_frame.pack(fill="x", padx=0, pady=0)
+
     check_vars = {}
+    header_vars = {}
     buttons = {}
 
     def redraw_items():
@@ -903,26 +969,47 @@ def main():
             w.destroy()
         buttons.clear()
         en = use_var.get()
+
+        tk.Label(text_frame, text="", width=20, anchor="w", pady=0).grid(row=0, column=0, padx=5, pady=0)
+        tk.Label(text_frame, text="Header", width=10, anchor="center", pady=0).grid(row=0, column=1, padx=5, pady=0)
+        tk.Label(text_frame, text="Move left", width=10, anchor="center", pady=0).grid(row=0, column=2, padx=5, pady=0)
+        tk.Label(text_frame, text="Move right", width=10, anchor="center", pady=0).grid(row=0, column=3, padx=5, pady=0)
+
         for idx, key in enumerate(order):
-            frm = tk.Frame(text_frame)
-            frm.pack(fill="x", pady=2)
-            name = DISPLAY_NAMES.get(key, key)
+            row = idx + 1
+
             var = check_vars.get(key, tk.BooleanVar(value=enabled.get(key, True)))
             check_vars[key] = var
-            tk.Checkbutton(frm, text=name, variable=var,
-                           state="normal" if en else "disabled").pack(side="left", padx=(0, 15))
+            name = DISPLAY_NAMES.get(key, key)
+            tk.Checkbutton(text_frame, text=name, variable=var,
+                           state="normal" if en else "disabled",
+                           anchor="w", width=18).grid(row=row, column=0, padx=5, pady=2, sticky="w")
+
+            hvar = header_vars.get(key)
+            if hvar is None:
+                saved_headers = custom.get("text_header", {})
+                hvar = tk.StringVar(value=saved_headers.get(key, "Text"))
+                header_vars[key] = hvar
+            header_combo = ttk.Combobox(text_frame, textvariable=hvar,
+                                        state="readonly" if en else "disabled", width=10)
+            header_combo['values'] = ["Nothing", "Text"]
+            header_combo.grid(row=row, column=1, padx=5, pady=2)
+            header_combo.bind("<<ComboboxSelected>>", lambda ev: ev.widget.selection_clear())
 
             def mk_left(i=idx):
                 return lambda: (swap_positions(order, i, -1), redraw_items(), update_state())
 
-            btnL = tk.Button(frm, text="Move left", width=8, command=mk_left())
-            btnL.pack(side="left", padx=5)
+            btnL = tk.Button(text_frame, text="Move left", width=10, command=mk_left(),
+                             state="normal" if en else "disabled")
+            btnL.grid(row=row, column=2, padx=5, pady=2)
 
             def mk_right(i=idx):
                 return lambda: (swap_positions(order, i, 1), redraw_items(), update_state())
 
-            btnR = tk.Button(frm, text="Move right", width=8, command=mk_right())
-            btnR.pack(side="left", padx=5)
+            btnR = tk.Button(text_frame, text="Move right", width=10, command=mk_right(),
+                             state="normal" if en else "disabled")
+            btnR.grid(row=row, column=3, padx=5, pady=2)
+
             buttons[key] = (btnL, btnR)
 
         _apply_eye_button_states()
@@ -995,6 +1082,7 @@ def main():
     _preview_vars = {
         "order":        order,
         "check_vars":   check_vars,
+        "header_vars":  header_vars,
         "system_fonts": system_fonts,
         "font_var":     font_var,
         "font_size_var":font_size_var,
@@ -1109,6 +1197,7 @@ def main():
             "negative_coords_color": neg_coords_color_var.get().strip(),
             "text_order": order,
             "text_enabled": {k: var.get() for k, var in check_vars.items()},
+            "text_header": {k: var.get() for k, var in header_vars.items()},
             "debug_mode": debug_var.get(),
             "idle_api_polling_rate": idle_val,
             "max_api_polling_rate": max_val,
@@ -1148,6 +1237,8 @@ def main():
             order[:] = custom["text_order"]
             for k, var in check_vars.items():
                 var.set(custom["text_enabled"].get(k, True))
+            for k, var in header_vars.items():
+                var.set(custom.get("text_header", {}).get(k, "Text"))
             redraw_items()
             update_state()
             update_blind_hide_after_state()
