@@ -233,10 +233,9 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
                     if show_ang:
-                        parts.append(("angle_arrow", f" {arrow} "))
+                        parts.append(("angle_change", f" {arrow} {abs(turn):.1f}"))
                     else:
-                        parts.append(("angle_arrow", f"{arrow} "))
-                    parts.append(("angle_adjust", f"{abs(turn):.1f}"))
+                        parts.append(("angle_change", f"{arrow} {abs(turn):.1f}"))
             elif key == "overworld_coords":
                 if ow_coords_format == "chunk":
                     ox, oz = cx, cz
@@ -301,9 +300,9 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         y = 5 + row * line_h
 
         for _item in parts:
-            if _item[0] == "angle_adjust":
+            if _item[0] == "angle_change":
                 try:
-                    _last_turn_pct[0] = float(_item[1])
+                    _last_turn_pct[0] = float(_item[1].strip().split()[-1])
                 except Exception:
                     pass
                 break
@@ -325,13 +324,12 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
-            elif kind in ("angle_adjust", "angle_arrow"):
+            elif kind == "angle_change":
                 txt = val
-                if kind == "angle_adjust":
-                    try:
-                        _last_turn_pct[0] = float(val)
-                    except Exception:
-                        pass
+                try:
+                    _last_turn_pct[0] = float(txt.strip().split()[-1])
+                except Exception:
+                    pass
                 draw.text((_cx(txt), y), txt, font=font,
                           fill=_gradient_color(_last_turn_pct[0]))
 
