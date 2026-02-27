@@ -394,7 +394,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     pass
                 fill = _gradient_color(_last_turn_pct[0])
                 arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 5 + draw.textbbox((0, 0), num, font=font)[2]
+                total_w = arrow_w + 4 + draw.textbbox((0, 0), num, font=font)[2]
                 col_start = col_left + (col_w - total_w) // 2
                 draw.text((col_start, y), arrow, font=font, fill=fill)
                 draw.text((col_start + arrow_w + 5, y), num, font=font, fill=fill)
@@ -443,7 +443,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             elif kind == "angle_change":
                 arrow, num = val
                 arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 3 + draw.textbbox((0, 0), num, font=font)[2]
+                total_w = arrow_w + 4 + draw.textbbox((0, 0), num, font=font)[2]
                 centered_start = c_left + (c_w - total_w) // 2
                 centered_end = centered_start + total_w
                 if actual_left is None or centered_start < actual_left:
