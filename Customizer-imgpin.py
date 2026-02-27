@@ -1,9 +1,13 @@
 import os
 import json
+import math
 import tkinter as tk
 import tkinter.font as tkFont
 import subprocess
+import threading
+import time
 from tkinter import ttk, messagebox, colorchooser
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 def find_dejavu_bold_path():
     known_paths = [
@@ -75,6 +79,290 @@ DISPLAY_NAMES = {
     "overworld_coords": "Overworld Coords",
     "nether_coords": "Nether Coords"
 }
+
+# ── Shared colour helpers (mirrors NBTrackr-imgpin.py) ───────────────────────
+
+def _hex_to_rgb(hexstr, fallback=(0, 0, 0)):
+    try:
+        s = hexstr.strip().lstrip("#")
+        if len(s) != 6:
+            return fallback
+        return (int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16))
+    except Exception:
+        return fallback
+
+def _certainty_color(pct):
+    pct = max(0.0, min(100.0, pct))
+    angle = (100 - pct) * 1.8
+    if angle <= 90:
+        t = angle / 90.0
+        return (int(255 * t), 255, 0)
+    t = (angle - 90) / 90.0
+    return (255, int(255 * (1 - t)), 0)
+
+def _gradient_color(angle):
+    if angle <= 90:
+        t = angle / 90.0
+        return (int(255 * t), 255, 0)
+    t = (angle - 90) / 90.0
+    return (255, int(255 * (1 - t)), 0)
+
+def _blind_eval_color(evaluation):
+    return {
+        'EXCELLENT':        (0, 255, 0),
+        'HIGHROLL_GOOD':    (100, 255, 100),
+        'HIGHROLL_OKAY':    (114, 214, 2),
+        'BAD_BUT_IN_RING':  (222, 220, 3),
+        'BAD':              (255, 100, 0),
+        'NOT_IN_RING':      (255, 0, 0),
+    }.get(evaluation, (255, 255, 255))
+
+def _format_blind_eval(evaluation):
+    return {
+        'EXCELLENT':        'excellent',
+        'HIGHROLL_GOOD':    'good for highroll',
+        'HIGHROLL_OKAY':    'okay for highroll',
+        'BAD_BUT_IN_RING':  'bad, but in ring',
+        'BAD':              'bad',
+        'NOT_IN_RING':      'not in any ring',
+    }.get(evaluation, evaluation)
+
+ADJ_POS  = (117, 204, 108)
+ADJ_NEG  = (204, 110, 114)
+
+def _load_preview_font(font_name, font_size):
+    font = None
+    if font_name:
+        try:
+            font = ImageFont.truetype(font_name, font_size)
+            return font
+        except Exception:
+            pass
+    for fallback in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "DejaVuSans-Bold.ttf",
+    ):
+        try:
+            font = ImageFont.truetype(fallback, font_size)
+            return font
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+PREVIEW_EYE_DATA = [
+    {"chunkX": 23, "chunkZ": -41, "certainty": 0.812, "overworldDistance": 847.0},
+    {"chunkX": 24, "chunkZ": -42, "certainty": 0.134, "overworldDistance": 851.0},
+    {"chunkX": 22, "chunkZ": -41, "certainty": 0.054, "overworldDistance": 843.0},
+]
+PREVIEW_PLAYER = {"xInOverworld": 120.0, "zInOverworld": -55.0,
+                  "horizontalAngle": -31.5, "isInNether": False}
+
+def render_eye_throws_preview(settings: dict) -> Image.Image:
+    bg_hex      = settings.get("background_color", "#FFFFFF")
+    text_hex    = settings.get("text_color", "#000000")
+    bg_rgb      = _hex_to_rgb(bg_hex, (255, 255, 255))
+    text_rgb    = _hex_to_rgb(text_hex, (0, 0, 0))
+    bg_rgba     = (*bg_rgb, 255)
+
+    shown_count = settings.get("shown_measurements", 1)
+    order       = settings.get("text_order", ["distance", "certainty_percentage", "angle",
+                                               "overworld_coords", "nether_coords"])
+    enabled     = settings.get("text_enabled", {k: True for k in order})
+    show_dir    = settings.get("show_angle_direction", True)
+    show_adj    = settings.get("show_angle_adjustment_count", False)
+    in_nether   = PREVIEW_PLAYER["isInNether"]
+    font_name   = settings.get("font_name", "")
+    font_size   = settings.get("font_size", 18)
+    show_coords_by_dim = settings.get("show_coords_based_on_dimension", False)
+
+    font = _load_preview_font(font_name, font_size)
+    ascent, descent = font.getmetrics()
+    line_h = ascent + descent + 6
+
+    preds = PREVIEW_EYE_DATA[:shown_count]
+    player_x = PREVIEW_PLAYER["xInOverworld"]
+    player_z = PREVIEW_PLAYER["zInOverworld"]
+    h_ang    = PREVIEW_PLAYER["horizontalAngle"]
+
+    adj_count_overlay = ("100.21", "+2", 2) if show_adj else None
+    adj_extra_h = (line_h + 4) if adj_count_overlay else 0
+
+    lines = []
+    for pred in preds:
+        cx, cz = pred["chunkX"], pred["chunkZ"]
+        cert   = pred["certainty"]
+        dist   = pred["overworldDistance"]
+        parts  = []
+        for key in order:
+            if not enabled.get(key, True):
+                continue
+            if key == "distance":
+                d = dist / 8 if in_nether else dist
+                parts.append(("distance", (str(round(d)), d)))
+            elif key == "certainty_percentage":
+                pct = round(cert * 100, 1)
+                parts.append(("certainty", f"{pct}%"))
+            elif key == "angle":
+                sx, sz = cx * 16 + 4, cz * 16 + 4
+                if in_nether:
+                    sx /= 8.0; sz /= 8.0
+                    px, pz = player_x / 8.0, player_z / 8.0
+                else:
+                    px, pz = player_x, player_z
+                dx, dz = sx - px, sz - pz
+                tgt    = (math.degrees(math.atan2(dz, dx)) + 270) % 360
+                signed = ((tgt + 180) % 360) - 180
+                turn   = ((tgt - (h_ang % 360) + 180) % 360) - 180
+                parts.append(("text", f"{signed:.2f}"))
+                if show_dir:
+                    arrow = "->" if turn > 0 else "<-"
+                    parts.append(("text", arrow))
+                    parts.append(("angle_adjust", f"{abs(turn):.1f}"))
+            elif key == "overworld_coords":
+                x, z = cx * 16 + 4, cz * 16 + 4
+                if show_coords_by_dim and in_nether:
+                    x, z = round(x / 8), round(z / 8)
+                parts.append(("text", f"({x}, {z})"))
+            elif key == "nether_coords":
+                x, z = cx * 16 + 4, cz * 16 + 4
+                if not (show_coords_by_dim and not in_nether):
+                    x, z = round(x / 8), round(z / 8)
+                parts.append(("text", f"({x}, {z})"))
+        if parts:
+            lines.append(parts)
+
+    if not lines:
+        img = Image.new("RGBA", (200, 40), bg_rgba)
+        draw = ImageDraw.Draw(img)
+        draw.text((10, 10), "(nothing to show)", font=font, fill=text_rgb)
+        return img
+
+    dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    required_w = 20
+    for parts in lines:
+        row_w = 10
+        for item in parts:
+            kind, val = item
+            txt = val[0] if kind in ("distance", "adj_count") else str(val)
+            gap = 6 if txt in ("->", "<-") else 14
+            row_w += dummy.textbbox((0, 0), txt, font=font)[2] + gap
+        required_w = max(required_w, row_w)
+
+    height = line_h * len(lines) + 10 + adj_extra_h
+    img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
+    draw = ImageDraw.Draw(img)
+
+    rightmost_x = 10
+    for row, parts in enumerate(lines):
+        x = 10
+        y = 5 + row * line_h
+        for item in parts:
+            kind, val = item
+            txt  = ""
+            fill = text_rgb
+            if kind == "certainty":
+                txt = val
+                try:
+                    fill = _certainty_color(float(txt.rstrip("%")))
+                except Exception:
+                    pass
+            elif kind == "angle_adjust":
+                txt = val
+                try:
+                    fill = _gradient_color(float(val))
+                except Exception:
+                    pass
+            elif kind == "distance":
+                txt, dval = val
+                fill = (255, 165, 0) if (not in_nether and dval <= 193) else text_rgb
+            else:
+                txt = str(val)
+            draw.text((x, y), txt, font=font, fill=fill)
+            gap = 6 if txt in ("->", "<-") else 14
+            x += draw.textbbox((0, 0), txt, font=font)[2] + gap
+        rightmost_x = max(rightmost_x, x)
+
+    if adj_count_overlay:
+        angle_txt, count_txt, adj_raw = adj_count_overlay
+        adj_fill = ADJ_POS if adj_raw >= 0 else ADJ_NEG
+
+        angle_w = draw.textbbox((0, 0), angle_txt, font=font)[2]
+        count_w = draw.textbbox((0, 0), count_txt, font=font)[2]
+        total_w = angle_w + count_w
+
+        adj_y = height - adj_extra_h + 2
+        adj_x = rightmost_x - 14 - total_w
+        adj_x = max(adj_x, 10)
+
+        draw.text((adj_x, adj_y), angle_txt, font=font, fill=text_rgb)
+        draw.text((adj_x + angle_w, adj_y), count_txt, font=font, fill=adj_fill)
+
+    return img
+
+PREVIEW_BLIND = {
+    "evaluation": "HIGHROLL_GOOD",
+    "xInNether": 312,
+    "zInNether": -87,
+    "highrollProbability": 0.734,
+    "highrollThreshold": 400,
+    "improveDirection": math.radians(47),
+    "improveDistance": 62,
+}
+
+def render_blind_preview(settings: dict) -> Image.Image:
+    bg_hex   = settings.get("background_color", "#FFFFFF")
+    text_hex = settings.get("text_color", "#000000")
+    bg_rgb   = _hex_to_rgb(bg_hex, (255, 255, 255))
+    text_rgb = _hex_to_rgb(text_hex, (0, 0, 0))
+    bg_rgba  = (*bg_rgb, 255)
+
+    font_name = settings.get("font_name", "")
+    font_size = settings.get("font_size", 18)
+    font = _load_preview_font(font_name, font_size)
+    ascent, descent = font.getmetrics()
+    line_h = ascent + descent + 6
+
+    br = PREVIEW_BLIND
+    evaluation   = br["evaluation"]
+    x_nether     = br["xInNether"]
+    z_nether     = br["zInNether"]
+    highroll_prob = br["highrollProbability"] * 100
+    highroll_thresh = br["highrollThreshold"]
+    improve_deg  = math.degrees(br["improveDirection"])
+    improve_dist = br["improveDistance"]
+
+    eval_text      = _format_blind_eval(evaluation)
+    eval_color     = _blind_eval_color(evaluation)
+    line1_pre      = f"Blind coords ({int(x_nether)}, {int(z_nether)}) are "
+    line1_eval     = eval_text
+    highroll_txt   = f"{highroll_prob:.1f}%"
+    line2_post     = f" chance of <{int(highroll_thresh)} block blind"
+    line3          = f"Head {improve_deg:.0f}°, {int(improve_dist)} blocks away, for better coords."
+
+    dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    def tw(t): return dummy.textbbox((0, 0), t, font=font)[2]
+
+    max_w = max(tw(line1_pre) + tw(line1_eval),
+                tw(highroll_txt) + tw(line2_post),
+                tw(line3))
+    height = line_h * 3 + 20
+    pad = 10
+    img  = Image.new("RGBA", (int(max_w + 2 * pad), height), bg_rgba)
+    draw = ImageDraw.Draw(img)
+
+    x, y = pad, 10
+    draw.text((x, y), line1_pre, font=font, fill=text_rgb)
+    draw.text((x + tw(line1_pre), y), line1_eval, font=font, fill=eval_color)
+
+    y += line_h
+    draw.text((pad, y), highroll_txt, font=font, fill=eval_color)
+    draw.text((pad + tw(highroll_txt), y), line2_post, font=font, fill=text_rgb)
+
+    y += line_h
+    draw.text((pad, y), line3, font=font, fill=text_rgb)
+
+    return img
 
 def ensure_custom_file_exists():
     cfg_dir = os.path.dirname(CUSTOM_PATH)
@@ -163,6 +451,111 @@ def find_system_fonts():
 
     return dict(sorted(fonts.items(), key=lambda x: x[0].lower()))
 
+def _collect_eye_settings(vars_dict: dict) -> dict:
+    order   = list(vars_dict["order"])
+    enabled = {k: v.get() for k, v in vars_dict["check_vars"].items()}
+    font_name = vars_dict["system_fonts"].get(vars_dict["font_var"].get(), "")
+    try:
+        font_size = int(vars_dict["font_size_var"].get())
+    except Exception:
+        font_size = 18
+    return {
+        "background_color":              vars_dict["bg_var"].get(),
+        "text_color":                    vars_dict["text_var"].get(),
+        "font_name":                     font_name,
+        "font_size":                     font_size,
+        "shown_measurements":            vars_dict["shown_var"].get(),
+        "show_angle_direction":          vars_dict["ang_var"].get(),
+        "show_angle_adjustment_count":   vars_dict["adj_count_var"].get(),
+        "show_coords_based_on_dimension":vars_dict["dim_var"].get(),
+        "text_order":                    order,
+        "text_enabled":                  enabled,
+    }
+
+
+def _collect_blind_settings(vars_dict: dict) -> dict:
+    font_name = vars_dict["system_fonts"].get(vars_dict["font_var"].get(), "")
+    try:
+        font_size = int(vars_dict["font_size_var"].get())
+    except Exception:
+        font_size = 18
+    return {
+        "background_color": vars_dict["bg_var"].get(),
+        "text_color":       vars_dict["text_var"].get(),
+        "font_name":        font_name,
+        "font_size":        font_size,
+    }
+
+
+def open_eye_preview(vars_dict: dict):
+    win = tk.Toplevel()
+    win.title("Eye Throws Overlay — Preview")
+    win.resizable(False, False)
+
+    lbl = tk.Label(win, bd=0, highlightthickness=0)
+    lbl.pack(padx=20, pady=20)
+
+    tk.Button(win, text="Exit", command=win.destroy).pack(pady=(0, 10))
+
+    _tk_img_ref = [None]  
+    _running    = [True]
+
+    def _refresh():
+        if not _running[0] or not win.winfo_exists():
+            return
+        try:
+            settings = _collect_eye_settings(vars_dict)
+            pil_img  = render_eye_throws_preview(settings)
+            tk_img   = ImageTk.PhotoImage(pil_img)
+            _tk_img_ref[0] = tk_img
+            lbl.config(image=tk_img)
+            win.geometry("")   
+        except Exception:
+            pass
+        win.after(300, _refresh)
+
+    def _on_close():
+        _running[0] = False
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", _on_close)
+    _refresh()
+
+
+def open_blind_preview(vars_dict: dict):
+    win = tk.Toplevel()
+    win.title("Blind Coords Overlay — Preview")
+    win.resizable(False, False)
+
+    lbl = tk.Label(win, bd=0, highlightthickness=0)
+    lbl.pack(padx=20, pady=20)
+
+    tk.Button(win, text="Exit", command=win.destroy).pack(pady=(0, 10))
+
+    _tk_img_ref = [None]
+    _running    = [True]
+
+    def _refresh():
+        if not _running[0] or not win.winfo_exists():
+            return
+        try:
+            settings = _collect_blind_settings(vars_dict)
+            pil_img  = render_blind_preview(settings)
+            tk_img   = ImageTk.PhotoImage(pil_img)
+            _tk_img_ref[0] = tk_img
+            lbl.config(image=tk_img)
+            win.geometry("")
+        except Exception:
+            pass
+        win.after(300, _refresh)
+
+    def _on_close():
+        _running[0] = False
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", _on_close)
+    _refresh()
+
 def main():
     ensure_custom_file_exists()
     custom = load_customizations()
@@ -241,6 +634,10 @@ def main():
 
     e = tk.Frame(tab_eye)
     e.pack(padx=10, pady=10, fill="x")
+
+    tk.Button(e, text="Preview Eye Throws Overlay",
+              command=lambda: open_eye_preview(_preview_vars)).pack(anchor="w", pady=(0, 10))
+    ttk.Separator(e, orient="horizontal").pack(fill="x", pady=(0, 10))
 
     f2 = tk.Frame(e); f2.pack(fill="x", pady=5)
     tk.Label(f2, text="Shown measurements", width=30, anchor="w").pack(side="left")
@@ -345,6 +742,10 @@ def main():
     b = tk.Frame(tab_blind)
     b.pack(padx=10, pady=10, fill="x")
 
+    tk.Button(b, text="Preview Blind Coords Overlay",
+              command=lambda: open_blind_preview(_preview_vars)).pack(anchor="w", pady=(0, 10))
+    ttk.Separator(b, orient="horizontal").pack(fill="x", pady=(0, 10))
+
     f_blind = tk.Frame(b); f_blind.pack(fill="x", pady=(5, 0))
     blind_info_var = tk.BooleanVar(value=custom.get("show_blind_info", True))
     tk.Label(f_blind, text="Show blind information", anchor="w").pack(side="left")
@@ -391,6 +792,20 @@ def main():
     max_rate_hint = tk.Label(adv, text="  Default 0.15s. The program will never poll slower than this.",
                              anchor="w", fg="#666666", font=("Helvetica", 9, "italic"))
     max_rate_hint.pack(fill="x", pady=(0, 5))
+
+    _preview_vars = {
+        "order":        order,
+        "check_vars":   check_vars,
+        "system_fonts": system_fonts,
+        "font_var":     font_var,
+        "font_size_var":font_size_var,
+        "bg_var":       bg_var,
+        "text_var":     text_var,
+        "shown_var":    shown_var,
+        "ang_var":      ang_var,
+        "adj_count_var":adj_count_var,
+        "dim_var":      dim_var,
+    }
 
     def update_blind_hide_after_state(*_):
         blind_on = blind_info_var.get() and use_var.get()
