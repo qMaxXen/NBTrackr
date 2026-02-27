@@ -369,7 +369,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     actual_left = None
     actual_right = None
-    for parts in lines:
+    for parts in lines[-1:]:
         for slot_idx, item in enumerate(parts):
             kind, val = item[0], item[1]
             if slot_idx >= len(col_x) or slot_idx >= len(col_widths):
@@ -409,7 +409,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     for oi in range(n_overlay_rows):
-        row_y = (line_h * len(lines) + 10) + oi * (line_h + 4) - 2
+        row_y = (line_h * len(lines) + 10) + oi * (line_h - 4) - 2
 
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
