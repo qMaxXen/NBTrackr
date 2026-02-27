@@ -36,32 +36,16 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
    ```bash
    tar -xf <filename>
    ```
-4. If you're using the **pinned image overlay method**, you must have tkinter installed:
-   - Debian/Ubuntu: `sudo apt install python3-tk`
-   - Arch Linux: `sudo pacman -S tk`
-   - Fedora: `sudo dnf install python3-tkinter`
-5. Install the required Python packages to run NBTrackr with the following command:
+4. Install the required Python packages to run NBTrackr with the following command:
 
    ```bash
    cd <extracted-folder>
-   pip install -r requirements.txt
+   chmod +x install.sh
+   ./install.sh
    ```
-> [!TIP]
-> Getting the `PEP 668 (externally-managed-environment)` error after running `pip install -r requirements.txt`? Create a Python virtual environment:
-> ```bash
-> # Make sure you are in the extracted folder
-> python -m venv venv
-> source venv/bin/activate
-> pip install -r requirements.txt
-> ```
-> To run the script from the terminal without needing to enter the venv, use the Python binary inside the venv:
-> ```bash
-> /full/path/to/venv/bin/python <script>.py
-> ```
-
-6. Now run the script with the following command in the terminal:
-   - For desktop notifications: `python NBTrackr-Notif.py`
-   - For pinned image overlay: `python NBTrackr-imgpin.py`
+5. Run the main script from inside the extracted folder with the following command in the terminal:
+   - For desktop notifications: `./venv/bin/python NBTrackr-Notif.py`
+   - For pinned image overlay: `./venv/bin/python NBTrackr-imgpin.py`
 > [!NOTE]
 > On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on first launch. This behavior depends
 > on your window manager or desktop environment. On X11, it should not steal focus. To unfocus it, simply switch to a different
