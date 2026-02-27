@@ -55,7 +55,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "font_size": 18,
     "background_color": "#FFFFFF",
     "text_color": "#000000",
-    "negative_coords_color_enabled": False,
+    "negative_coords_color_enabled": True,
     "negative_coords_color": "#BA6669",
     "text_order": [
         "overworld_coords",
