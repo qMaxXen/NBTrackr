@@ -1,3 +1,4 @@
+from multiprocessing import dummy
 import tkinter as tk
 from tkinter import font
 from PIL import Image, ImageTk, UnidentifiedImageError, ImageDraw, ImageFont
@@ -552,9 +553,9 @@ def generate_custom_pinned_image():
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
                     if show_ang:
-                        parts.append(("angle_space", " "))
-                    parts.append(("angle_arrow", arrow))
-                    parts.append(("angle_arrow_space", " "))
+                        parts.append(("angle_arrow", f" {arrow} "))
+                    else:
+                        parts.append(("angle_arrow", f"{arrow} "))
                     parts.append(("angle_adjust", f"{abs(turn):.1f}"))
 
             elif key == "overworld_coords":
@@ -588,10 +589,7 @@ def generate_custom_pinned_image():
                 log("Throw", pred_idx, "adj count:", increments)
                 if increments != 0:
                     sign = "+" if increments >= 0 else ""
-                    adj_count_overlays.append((f"{angle_with:.2f}", f"{sign}{increments}", increments))
-            if show_angle_error:
-                error_val = throw.get("error", 0.0)
-                angle_error_overlays.append((f"{error_val:.4f}",))
+                    adj_count_overlays.append((f"{angle_without:.2f}", f"{sign}{increments}", increments))
 
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
@@ -644,7 +642,7 @@ def generate_custom_pinned_image():
             txt = f"({cx_v}, {cz_v})"
         else:
             txt = str(val)
-        gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
+        gap = 14
         return dummy.textbbox((0, 0), txt, font=font)[2] + gap, txt
 
     col_widths = [] 
@@ -699,7 +697,7 @@ def generate_custom_pinned_image():
                     fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
-            elif kind in ("angle_adjust", "angle_arrow", "angle_arrow_space", "angle_space"):
+            elif kind in ("angle_adjust", "angle_arrow"):
                 txt = val
                 if kind == "angle_adjust":
                     try:

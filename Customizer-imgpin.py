@@ -233,9 +233,9 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
                     if show_ang:
-                        parts.append(("angle_space", " "))
-                    parts.append(("angle_arrow", arrow))
-                    parts.append(("angle_arrow_space", " "))
+                        parts.append(("angle_arrow", f" {arrow} "))
+                    else:
+                        parts.append(("angle_arrow", f"{arrow} "))
                     parts.append(("angle_adjust", f"{abs(turn):.1f}"))
             elif key == "overworld_coords":
                 if ow_coords_format == "chunk":
@@ -271,7 +271,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             txt = f"({cx_v}, {cz_v})"
         else:
             txt = str(val)
-        gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
+        gap = 14
         return dummy.textbbox((0, 0), txt, font=font)[2] + gap
 
     col_widths = []
@@ -325,7 +325,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
-            elif kind in ("angle_adjust", "angle_arrow", "angle_arrow_space", "angle_space"):
+            elif kind in ("angle_adjust", "angle_arrow"):
                 txt = val
                 if kind == "angle_adjust":
                     try:
