@@ -519,7 +519,7 @@ def generate_custom_pinned_image():
 
             if key == "distance":
                 d = dist/8 if in_nether else dist
-                parts.append(("distance", (str(round(d)), d)))
+                parts.append(("distance", (str(int(d)), d)))
                 
             elif key == "certainty_percentage":
                 pct = round(cert * 100, 1)
