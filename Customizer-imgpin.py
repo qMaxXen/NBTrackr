@@ -262,31 +262,44 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         return img
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    required_w = 20
+
+    def _pw(kind, val):
+        if kind == "distance":
+            txt = val[0]
+        elif kind == "coords":
+            cx_v, cz_v = val
+            txt = f"({cx_v}, {cz_v})"
+        else:
+            txt = str(val)
+        gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
+        return dummy.textbbox((0, 0), txt, font=font)[2] + gap
+
+    col_widths = []
     for parts in lines:
-        row_w = 10
-        for item in parts:
-            kind, val = item
-            if kind == "distance":
-                txt = val[0]
-            elif kind == "coords":
-                cx_v, cz_v = val
-                txt = f"({cx_v}, {cz_v})"
+        for slot_idx, item in enumerate(parts):
+            w = _pw(item[0], item[1])
+            if slot_idx >= len(col_widths):
+                col_widths.append(w)
             else:
-                txt = str(val)
-            gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
-            row_w += dummy.textbbox((0, 0), txt, font=font)[2] + gap
-        required_w = max(required_w, row_w)
+                col_widths[slot_idx] = max(col_widths[slot_idx], w)
+
+    required_w = 10 + sum(col_widths) + 10
 
     height = line_h * len(lines) + 10 + bottom_extra_h
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
 
-    rightmost_x    = 10
+    col_x = []
+    cx_acc = 10
+    for w in col_widths:
+        col_x.append(cx_acc)
+        cx_acc += w
+    rightmost_x    = cx_acc
     _last_turn_pct = [0.0]
+
     for row, parts in enumerate(lines):
-        x = 10
         y = 5 + row * line_h
+
         for _item in parts:
             if _item[0] == "angle_adjust":
                 try:
@@ -294,16 +307,24 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 except Exception:
                     pass
                 break
-        for item in parts:
+
+        for slot_idx, item in enumerate(parts):
             kind, val = item
-            txt  = ""
-            fill = text_rgb
+            col_left = col_x[slot_idx] if slot_idx < len(col_x) else 10
+            col_w    = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
+
+            def _cx(txt):
+                tw = draw.textbbox((0, 0), txt, font=font)[2]
+                return col_left + (col_w - tw) // 2
+
             if kind == "certainty":
                 txt = val
                 try:
                     fill = _certainty_color(float(txt.rstrip("%")))
                 except Exception:
-                    pass
+                    fill = text_rgb
+                draw.text((_cx(txt), y), txt, font=font, fill=fill)
+
             elif kind in ("angle_adjust", "angle_arrow", "angle_arrow_space", "angle_space"):
                 txt = val
                 if kind == "angle_adjust":
@@ -311,34 +332,35 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                         _last_turn_pct[0] = float(val)
                     except Exception:
                         pass
-                fill = _gradient_color(_last_turn_pct[0])
+                draw.text((_cx(txt), y), txt, font=font,
+                          fill=_gradient_color(_last_turn_pct[0]))
+
             elif kind == "distance":
                 txt, dval = val
                 fill = (255, 165, 0) if (not in_nether and dval <= 193) else text_rgb
+                draw.text((_cx(txt), y), txt, font=font, fill=fill)
+
             elif kind == "coords":
                 cx_v, cz_v = val
                 x_str = str(cx_v)
                 z_str = str(cz_v)
                 x_fill = (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb)
                 z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
-                draw.text((x, y), "(", font=font, fill=text_rgb)
-                x += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((x, y), x_str, font=font, fill=x_fill)
-                x += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((x, y), ", ", font=font, fill=text_rgb)
-                x += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((x, y), z_str, font=font, fill=z_fill)
-                x += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((x, y), ")", font=font, fill=text_rgb)
-                x += draw.textbbox((0, 0), ")", font=font)[2] + 14
-                rightmost_x = max(rightmost_x, x)
-                continue
+                full_txt = f"({cx_v}, {cz_v})"
+                bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
+                draw.text((bx, y), "(", font=font, fill=text_rgb)
+                bx += draw.textbbox((0, 0), "(", font=font)[2]
+                draw.text((bx, y), x_str, font=font, fill=x_fill)
+                bx += draw.textbbox((0, 0), x_str, font=font)[2]
+                draw.text((bx, y), ", ", font=font, fill=text_rgb)
+                bx += draw.textbbox((0, 0), ", ", font=font)[2]
+                draw.text((bx, y), z_str, font=font, fill=z_fill)
+                bx += draw.textbbox((0, 0), z_str, font=font)[2]
+                draw.text((bx, y), ")", font=font, fill=text_rgb)
+
             else:
                 txt = str(val)
-            draw.text((x, y), txt, font=font, fill=fill)
-            gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
-            x += draw.textbbox((0, 0), txt, font=font)[2] + gap
-        rightmost_x = max(rightmost_x, x)
+                draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     for oi in range(n_overlay_rows):

@@ -632,33 +632,44 @@ def generate_custom_pinned_image():
     height = line_h * len(lines) + 10 + bottom_extra_h
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    required_w = 20
-    for parts in lines:
-        row_w = 10
-        for item in parts:
-            kind = item[0]
-            val = item[1]
-            if kind == "distance":
-                try:
-                    txt, _ = val
-                except Exception:
-                    txt = str(val)
-            elif kind == "coords":
-                cx_v, cz_v = val
-                txt = f"({cx_v}, {cz_v})"
-            else:
+
+    def _item_display_width(kind, val):
+        if kind == "distance":
+            try:
+                txt, _ = val
+            except Exception:
                 txt = str(val)
-            pixel_gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
-            row_w += dummy.textbbox((0, 0), txt, font=font)[2] + pixel_gap
-        required_w = max(required_w, row_w)
+        elif kind == "coords":
+            cx_v, cz_v = val
+            txt = f"({cx_v}, {cz_v})"
+        else:
+            txt = str(val)
+        gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
+        return dummy.textbbox((0, 0), txt, font=font)[2] + gap, txt
+
+    col_widths = [] 
+    for parts in lines:
+        for slot_idx, item in enumerate(parts):
+            w, _ = _item_display_width(item[0], item[1])
+            if slot_idx >= len(col_widths):
+                col_widths.append(w)
+            else:
+                col_widths[slot_idx] = max(col_widths[slot_idx], w)
+
+    required_w = 10 + sum(col_widths) + 10
 
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
 
-    rightmost_x = 10 
-    _last_turn_pct = [0.0] 
+    col_x = []
+    cx_acc = 10
+    for w in col_widths:
+        col_x.append(cx_acc)
+        cx_acc += w
+    rightmost_x = cx_acc 
+    _last_turn_pct = [0.0]
+
     for row, parts in enumerate(lines):
-        x = 10
         y = 5 + row * line_h
 
         for _item in parts:
@@ -668,12 +679,16 @@ def generate_custom_pinned_image():
                 except Exception:
                     pass
                 break
-        for item in parts:
-            kind = item[0]
-            val = item[1]
 
-            txt = ""
-            fill = text_rgb
+        for slot_idx, item in enumerate(parts):
+            kind = item[0]
+            val  = item[1]
+            col_left  = col_x[slot_idx] if slot_idx < len(col_x) else 10
+            col_w     = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
+
+            def _cx(txt):
+                tw = draw.textbbox((0, 0), txt, font=font)[2]
+                return col_left + (col_w - tw) // 2
 
             if kind == "certainty":
                 txt = val
@@ -682,6 +697,7 @@ def generate_custom_pinned_image():
                     fill = certainty_color(pct)
                 except Exception:
                     fill = text_rgb
+                draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
             elif kind in ("angle_adjust", "angle_arrow", "angle_arrow_space", "angle_space"):
                 txt = val
@@ -691,56 +707,43 @@ def generate_custom_pinned_image():
                     except Exception:
                         pass
                 fill = gradient_color(_last_turn_pct[0])
+                draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
             elif kind == "distance":
-                    try:
-                        txt, dval = val
-                    except Exception:
-                        txt = str(val)
-                        dval = None
+                try:
+                    txt, dval = val
+                except Exception:
+                    txt = str(val)
+                    dval = None
+                if in_nether:
+                    fill = text_rgb
+                else:
+                    fill = (255, 165, 0) if (dval is not None and dval <= 193) else text_rgb
+                draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
-                    if in_nether:
-                        fill = text_rgb
-                    else:
-                        if dval is not None and dval <= 193:
-                            fill = (255, 165, 0)
-                        else:
-                            fill = text_rgb
             elif kind == "coords":
                 cx_v, cz_v = val
-                paren_open  = "("
-                comma_space = ", "
-                paren_close = ")"
                 x_str = str(cx_v)
                 z_str = str(cz_v)
                 x_fill = (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb)
                 z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
+                full_txt = f"({cx_v}, {cz_v})"
+                bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
+                draw.text((bx, y), "(", font=font, fill=text_rgb)
+                bx += draw.textbbox((0, 0), "(", font=font)[2]
+                draw.text((bx, y), x_str, font=font, fill=x_fill)
+                bx += draw.textbbox((0, 0), x_str, font=font)[2]
+                draw.text((bx, y), ", ", font=font, fill=text_rgb)
+                bx += draw.textbbox((0, 0), ", ", font=font)[2]
+                draw.text((bx, y), z_str, font=font, fill=z_fill)
+                bx += draw.textbbox((0, 0), z_str, font=font)[2]
+                draw.text((bx, y), ")", font=font, fill=text_rgb)
 
-                draw.text((x, y), paren_open, font=font, fill=text_rgb)
-                x += draw.textbbox((0, 0), paren_open, font=font)[2]
-                draw.text((x, y), x_str, font=font, fill=x_fill)
-                x += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((x, y), comma_space, font=font, fill=text_rgb)
-                x += draw.textbbox((0, 0), comma_space, font=font)[2]
-                draw.text((x, y), z_str, font=font, fill=z_fill)
-                x += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((x, y), paren_close, font=font, fill=text_rgb)
-                pixel_gap = 14
-                x += draw.textbbox((0, 0), paren_close, font=font)[2] + pixel_gap
-                max_w = max(max_w, x)
-                rightmost_x = max(rightmost_x, x)
-                continue  
             else:
                 txt = str(val)
-                fill = text_rgb
+                draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
 
-            draw.text((x, y), txt, font=font, fill=fill)
-            pixel_gap = 0 if kind in ("angle_arrow", "angle_space", "angle_arrow_space") else 14
-            w = draw.textbbox((0, 0), txt, font=font)[2] + pixel_gap
-            x += w
-
-        max_w = max(max_w, x)
-        rightmost_x = max(rightmost_x, x)
+        max_w = max(max_w, rightmost_x)
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     for oi in range(n_overlay_rows):
