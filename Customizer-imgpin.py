@@ -367,9 +367,49 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 txt = str(val)
                 draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
 
+    actual_left = None
+    actual_right = None
+    for parts in lines:
+        for slot_idx, item in enumerate(parts):
+            kind, val = item[0], item[1]
+            if slot_idx >= len(col_x) or slot_idx >= len(col_widths):
+                continue
+            c_left = col_x[slot_idx]
+            c_w = col_widths[slot_idx]
+            if kind == "distance":
+                txt = val[0]
+            elif kind == "coords":
+                cx_v, cz_v = val
+                txt = f"({cx_v}, {cz_v})"
+            elif kind == "angle_change":
+                arrow, num = val
+                arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
+                total_w = arrow_w + 3 + draw.textbbox((0, 0), num, font=font)[2]
+                centered_start = c_left + (c_w - total_w) // 2
+                centered_end = centered_start + total_w
+                if actual_left is None or centered_start < actual_left:
+                    actual_left = centered_start
+                if actual_right is None or centered_end > actual_right:
+                    actual_right = centered_end
+                continue
+            else:
+                txt = str(val)
+            txt_w = draw.textbbox((0, 0), txt, font=font)[2]
+            centered_start = c_left + (c_w - txt_w) // 2
+            centered_end = centered_start + txt_w
+            if actual_left is None or centered_start < actual_left:
+                actual_left = centered_start
+            if actual_right is None or centered_end > actual_right:
+                actual_right = centered_end
+
+    if actual_left is None:
+        actual_left = 10
+    if actual_right is None:
+        actual_right = 10
+
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     for oi in range(n_overlay_rows):
-        row_y = (line_h * len(lines) + 10) + oi * (line_h + 4) + 2
+        row_y = (line_h * len(lines) + 10) + oi * (line_h + 4) - 2
 
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
@@ -377,14 +417,14 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             angle_w  = draw.textbbox((0, 0), angle_txt, font=font)[2]
             count_w  = draw.textbbox((0, 0), count_txt, font=font)[2]
             total_w  = angle_w + count_w
-            adj_x    = rightmost_x - 14 - total_w
-            adj_x    = max(adj_x, 10)
+            adj_x    = actual_right - total_w
+            adj_x    = max(adj_x, actual_left)
             draw.text((adj_x, row_y), angle_txt, font=font, fill=text_rgb)
             draw.text((adj_x + angle_w, row_y), count_txt, font=font, fill=adj_fill)
 
         if oi < len(angle_error_overlays):
             err_txt = angle_error_overlays[oi][0]
-            draw.text((10, row_y), err_txt, font=font, fill=text_rgb)
+            draw.text((actual_left, row_y), err_txt, font=font, fill=text_rgb)
 
     return img
 
