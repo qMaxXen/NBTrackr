@@ -552,7 +552,7 @@ def generate_custom_pinned_image():
 
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
-                    parts.append(("angle_change", f"{arrow} {abs(turn):.1f}"))
+                    parts.append(("angle_change", (arrow, f"{abs(turn):.1f}")))
 
             elif key == "overworld_coords":
                 if ow_coords_format == "chunk":
@@ -641,6 +641,11 @@ def generate_custom_pinned_image():
         elif kind == "coords":
             cx_v, cz_v = val
             txt = f"({cx_v}, {cz_v})"
+        elif kind == "angle_change":
+            arrow, num = val
+            txt = arrow + num
+            w = dummy.textbbox((0, 0), arrow, font=font)[2] + 6 + dummy.textbbox((0, 0), num, font=font)[2]
+            return w + 14, txt
         else:
             txt = str(val)
         gap = 14
@@ -674,7 +679,7 @@ def generate_custom_pinned_image():
         for _item in parts:
             if _item[0] == "angle_change":
                 try:
-                    _last_turn_pct[0] = float(_item[1].strip().split()[-1])
+                    _last_turn_pct[0] = float(_item[1][1])
                 except Exception:
                     pass
                 break
@@ -699,13 +704,17 @@ def generate_custom_pinned_image():
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
             elif kind == "angle_change":
-                txt = val
+                arrow, num = val
                 try:
-                    _last_turn_pct[0] = float(txt.strip().split()[-1])
+                    _last_turn_pct[0] = float(num)
                 except Exception:
                     pass
                 fill = gradient_color(_last_turn_pct[0])
-                draw.text((_cx(txt), y), txt, font=font, fill=fill)
+                arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
+                total_w = arrow_w + 3 + draw.textbbox((0, 0), num, font=font)[2]
+                col_start = col_left + (col_w - total_w) // 2
+                draw.text((col_start, y), arrow, font=font, fill=fill)
+                draw.text((col_start + arrow_w + 3, y), num, font=font, fill=fill)
 
             elif kind == "distance":
                 try:
