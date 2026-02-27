@@ -497,8 +497,9 @@ def open_eye_preview(vars_dict: dict):
 
     tk.Button(win, text="Exit", command=win.destroy).pack(pady=(0, 10))
 
-    _tk_img_ref = [None]  
-    _running    = [True]
+    _tk_img_ref  = [None]
+    _running     = [True]
+    _first_frame = [True]
 
     def _refresh():
         if not _running[0] or not win.winfo_exists():
@@ -509,7 +510,9 @@ def open_eye_preview(vars_dict: dict):
             tk_img   = ImageTk.PhotoImage(pil_img)
             _tk_img_ref[0] = tk_img
             lbl.config(image=tk_img)
-            win.geometry("")   
+            if _first_frame[0]:
+                win.geometry("")   
+                _first_frame[0] = False
         except Exception:
             pass
         win.after(300, _refresh)
@@ -532,8 +535,9 @@ def open_blind_preview(vars_dict: dict):
 
     tk.Button(win, text="Exit", command=win.destroy).pack(pady=(0, 10))
 
-    _tk_img_ref = [None]
-    _running    = [True]
+    _tk_img_ref  = [None]
+    _running     = [True]
+    _first_frame = [True]
 
     def _refresh():
         if not _running[0] or not win.winfo_exists():
@@ -544,7 +548,9 @@ def open_blind_preview(vars_dict: dict):
             tk_img   = ImageTk.PhotoImage(pil_img)
             _tk_img_ref[0] = tk_img
             lbl.config(image=tk_img)
-            win.geometry("")
+            if _first_frame[0]:
+                win.geometry("")
+                _first_frame[0] = False
         except Exception:
             pass
         win.after(300, _refresh)
