@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import font
 from PIL import Image, ImageTk, UnidentifiedImageError, ImageDraw, ImageFont
 import math
 import os
@@ -206,6 +207,7 @@ def generate_custom_pinned_image():
     blind_hide_after_enabled  = custom.get("blind_info_hide_after_enabled", False)
     font_size          = custom.get("font_size", 18)
     show_adj_count     = custom.get("show_angle_adjustment_count", False)
+    adj_count_position = custom.get("adj_count_position", "bottom_right")
 
     try:
         boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
@@ -495,7 +497,8 @@ def generate_custom_pinned_image():
     show_dir    = custom.get("show_angle_direction", True)
 
     lines = []
-    for pred_idx, pred in enumerate(preds[:shown_count]):
+    adj_count_overlay = None 
+    for pred_idx, pred in enumerate(preds[:shown_count]): 
         cx, cz = pred.get("chunkX"), pred.get("chunkZ")
         cert   = pred.get("certainty")
         dist   = pred.get("overworldDistance")
@@ -550,7 +553,7 @@ def generate_custom_pinned_image():
                     log("Angle adjustment count:", increments, "from correction:", correction, "(angle:", angle_with, "angleWithoutCorrection:", angle_without, ")")
                     if increments != 0:
                         sign = "+" if increments >= 0 else ""
-                        parts.append(("adj_count", (f"{sign}{increments}", increments)))
+                        adj_count_overlay = (f"{angle_with:.2f}", f"{sign}{increments}", increments)
 
             elif key == "overworld_coords":
                 x, z = cx*16+4, cz*16+4
@@ -601,7 +604,8 @@ def generate_custom_pinned_image():
     line_h = ascent + descent + 6
 
     max_w  = 0
-    height = line_h * len(lines) + 10
+    adj_count_extra_h = (line_h + 4) if adj_count_overlay else 0
+    height = line_h * len(lines) + 10 + adj_count_extra_h
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     required_w = 20
@@ -629,16 +633,17 @@ def generate_custom_pinned_image():
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
 
+    rightmost_x = 10 
     for row, parts in enumerate(lines):
         x = 10
         y = 5 + row * line_h
         for item in parts:
             kind = item[0]
             val = item[1]
-    
+
             txt = ""
             fill = text_rgb
-    
+
             if kind == "certainty":
                 txt = val
                 try:
@@ -646,7 +651,7 @@ def generate_custom_pinned_image():
                     fill = certainty_color(pct)
                 except Exception:
                     fill = text_rgb
-    
+
             elif kind == "angle_adjust":
                 txt = val
                 try:
@@ -654,39 +659,47 @@ def generate_custom_pinned_image():
                     fill = gradient_color(pct)
                 except Exception:
                     fill = text_rgb
-    
+
             elif kind == "distance":
                     try:
                         txt, dval = val
                     except Exception:
                         txt = str(val)
                         dval = None
-                
+
                     if in_nether:
                         fill = text_rgb
                     else:
                         if dval is not None and dval <= 193:
-                            fill = (255, 165, 0) 
+                            fill = (255, 165, 0)
                         else:
                             fill = text_rgb
-            elif kind == "adj_count":
-                try:
-                    txt, raw_int = val
-                except Exception:
-                    txt = str(val)
-                    raw_int = 0
-                fill = ADJ_COUNT_POSITIVE if raw_int >= 0 else ADJ_COUNT_NEGATIVE  
             else:
                 txt = str(val)
                 fill = text_rgb
-    
+
             draw.text((x, y), txt, font=font, fill=fill)
             pixel_gap = 6 if txt in ("->", "<-") else 14
             w = draw.textbbox((0, 0), txt, font=font)[2] + pixel_gap
             x += w
-    
-        max_w = max(max_w, x)
 
+        max_w = max(max_w, x)
+        rightmost_x = max(rightmost_x, x)
+
+    if adj_count_overlay:
+        angle_txt, count_txt, adj_raw = adj_count_overlay
+        adj_fill = ADJ_COUNT_POSITIVE if adj_raw >= 0 else ADJ_COUNT_NEGATIVE
+
+        angle_w = draw.textbbox((0, 0), angle_txt, font=font)[2]
+        count_w = draw.textbbox((0, 0), count_txt, font=font)[2]
+        total_w = angle_w + count_w
+
+        adj_y = height - adj_count_extra_h + 2
+        adj_x = rightmost_x - 14 - total_w
+        adj_x = max(adj_x, 10)
+
+        draw.text((adj_x, adj_y), angle_txt, font=font, fill=text_rgb)
+        draw.text((adj_x + angle_w, adj_y), count_txt, font=font, fill=adj_fill)
     
     tmp = IMAGE_PATH + ".tmp.png"
     try:
