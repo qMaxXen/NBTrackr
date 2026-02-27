@@ -47,7 +47,7 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
    - For desktop notifications: `./venv/bin/python NBTrackr-Notif.py`
    - For pinned image overlay: `./venv/bin/python NBTrackr-imgpin.py`
 > [!NOTE]
-> On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on first launch. This behavior depends
+> On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on launch. This behavior depends
 > on your window manager or desktop environment. On X11, it should not steal focus. To unfocus it, simply switch to a different
 > workspace or click on another window. If you ever click on the pinned image overlay window, you will need to repeat this
 > action.
