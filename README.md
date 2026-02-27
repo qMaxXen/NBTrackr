@@ -16,7 +16,7 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 > You can scroll down to the [Features](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#features-desktop-notifications) section to see what each method looks like.
 
 > [!CAUTION]
-> **NBTrackr-Notif** will be removed in the next release. It lacks many features compared to
+> The **desktop notifications method** will be removed in the next release. It lacks many features compared to
 > **NBTrackr-imgpin** and removing it will make the project easier to maintain.
 > Please consider using the pinned image overlay method instead.
 
@@ -85,25 +85,26 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
 
 ## Features: Pinned Image Overlay
 
-### Basic Pinned Image Overlay Features
-
+### General Pinned Image Overlay Features
 - The pinned image overlay will not appear if Ninjabrain Bot has no calculations.
 - The pinned image overlay appears on top of your Minecraft window.
-- Shows whether you have a red or green boat:
-  - The red or green boat pinned image is shown for only 10 seconds.
-  - If you have blue boat, no pinned image will be shown.
 - You can freely move the overlay.
 - The pinned image position gets saved and restored.
   - Position data is saved in `~/.config/NBTrackr/settings.json`
+
+### Default Pinned Image Overlay Features (uses nb-overlay.png) 
+- Shows whether you have a red or green boat:
+  - The red or green boat pinned image is shown for only 10 seconds.
+  - If you have blue boat, no pinned image will be shown.
+
+> [!NOTE]
+> I recommend using the [custom pinned image overlay](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#custom-pinned-image-overlay-uses-the-api), as the default one uses Ninjabrain Bot’s `nb-overlay.png`, which updates with a delay. The custom pinned image overlay uses the API directly, so it updates instantly with no delay.
+
 <img src="https://github.com/user-attachments/assets/16035fd8-3ced-4733-b665-be802fc4c40b" width="400"/>
 <img src="https://github.com/user-attachments/assets/5cc0f894-6c93-486a-8f02-6be4c9193e60" width="400"/>
 <img src="https://github.com/user-attachments/assets/3aaecc98-92ed-45db-a828-2f9751f48acf" width="400"/>
 
-
-> [!TIP]
-> I recommend using the [custom pinned image overlay](https://github.com/qMaxXen/NBTrackr?tab=readme-ov-file#customization-custom-pinned-image-overlay), as the default one uses Ninjabrain Bot’s `nb-overlay.png`, which updates with a delay. The custom pinned image overlay uses the API directly, so it updates instantly with no delay.
-
-### Customization: Custom pinned image overlay
+### Custom Pinned Image Overlay (uses the API)
 
 - Run the `Customizer-imgpin.py` script to choose your overlay preferences.
   - Customization settings are saved to `~/.config/NBTrackr/customizations.json`.
