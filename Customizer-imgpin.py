@@ -40,7 +40,7 @@ CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 
 DEFAULT_CUSTOMIZATIONS = {
     "use_custom_pinned_image": False,
-    "shown_measurements": 1,
+    "shown_measurements": 5,
     "overworld_coords_format": "four_four",
     "angle_display_mode": "angle_and_change",    
     "show_angle_adjustment_count": False,
@@ -921,7 +921,7 @@ def main():
 
     f2 = tk.Frame(e); f2.pack(fill="x", pady=5)
     tk.Label(f2, text="Shown measurements", width=30, anchor="w").pack(side="left")
-    shown_var = tk.IntVar(value=custom.get("shown_measurements", 1))
+    shown_var = tk.IntVar(value=custom.get("shown_measurements", 5))
     cb_shown = ttk.Combobox(f2, textvariable=shown_var, state="readonly", width=5)
     cb_shown['values'] = [1, 2, 3, 4, 5]
     cb_shown.pack(side="left", padx=5)
