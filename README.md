@@ -110,9 +110,9 @@ I created two ways to display Ninjabrain Bot info. The first uses desktop notifi
   - Customization settings are saved to `~/.config/NBTrackr/customizations.json`.
 - To display the overlay in-game, run the `NBTrackr-imgpin.py` script.
 
-<img src="https://github.com/user-attachments/assets/a9d7602a-f498-4973-9a6a-8602441f6857" width="300"/>
+<img src="https://github.com/user-attachments/assets/8814d7c0-6955-4bde-b920-1ae5495737bb" width="400"/>
 <br />
-<img src="https://github.com/user-attachments/assets/86bc35da-5947-452d-9fcf-7bcbd4cb1b03" width="500"/>
+<img src="https://github.com/user-attachments/assets/88ede89b-ae2a-4b07-ab6a-b2f889377195" width="500"/>
 
 ## Credits
 - [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
