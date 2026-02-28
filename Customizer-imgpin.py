@@ -220,7 +220,11 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         ]
     else:
         adj_count_overlays = []
-    angle_error_overlays = [("0.0002",), ("-0.0015",)] if show_angle_error else []
+    angle_error_overlays = [
+        ("0.0002",),
+        ("-0.0015",),
+        ("0.0034",)
+    ] if show_angle_error else []
     n_bottom_rows  = max(len(adj_count_overlays), len(angle_error_overlays))
     bottom_extra_h = (line_h + 4) * n_bottom_rows
     lines = []
@@ -495,18 +499,27 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
-            adj_fill = ADJ_POS if adj_raw >= 0 else ADJ_NEG
+
             angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
-            count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+            if count_txt is not None:
+                count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+            else:
+                count_w = 0
+
             total_w = angle_w + count_w
+
             if oi == 0:
                 adj_x = actual_right - total_w
                 first_adj_x = adj_x
                 first_adj_total_w = total_w
             else:
                 adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
+
             draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgb)
-            draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
+
+            if count_txt is not None:
+                adj_fill = ADJ_POS if (adj_raw is None or adj_raw >= 0) else ADJ_NEG
+                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
 
         if oi < len(angle_error_overlays):
             err_txt = angle_error_overlays[oi][0]
