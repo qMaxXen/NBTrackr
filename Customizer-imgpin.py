@@ -312,15 +312,18 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     has_header = any(text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True))
     header_h = line_h if has_header else 0
     show_overlay_header = settings.get("show_overlay_header", False)
-    _small_font_size_est = max(8, int(font_size * 0.90))
-    _small_line_h_est = _small_font_size_est + 4 + 4
-    _overlay_header_h_est = _small_line_h_est if (show_overlay_header and n_bottom_rows > 0) else 0
-    bottom_extra_h = (_overlay_header_h_est + (_small_line_h_est - 2) * n_bottom_rows) if n_bottom_rows > 0 else 0
+
+    small_font_size = max(8, int(font_size * 0.90))
+    small_font = _load_preview_font(font_name, small_font_size)
+    small_ascent, small_descent = small_font.getmetrics()
+    small_line_h = small_ascent + small_descent + 4
+
+    overlay_header_h = small_line_h if (show_overlay_header and n_bottom_rows > 0) else 0
+    bottom_extra_h = (overlay_header_h + (small_line_h - 2) * n_bottom_rows + 4) if n_bottom_rows > 0 else 0
     height = header_h + line_h * len(lines) + 10 + bottom_extra_h
 
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
-
     if has_header:
         visible_keys = [k for k in order if enabled.get(k, True)]
         key_slots = {}
@@ -427,13 +430,6 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             else:
                 txt = str(val)
                 draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
-
-    small_font_size = max(8, int(font_size * 0.90))
-    small_font = _load_preview_font(font_name, small_font_size)
-    small_ascent, small_descent = small_font.getmetrics()
-    small_line_h = small_ascent + small_descent + 4
-
-    show_overlay_header = settings.get("show_overlay_header", False)
 
     actual_left = None
     actual_right = None

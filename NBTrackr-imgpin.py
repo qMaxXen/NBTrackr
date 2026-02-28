@@ -637,10 +637,34 @@ def generate_custom_pinned_image():
 
     max_w  = 0
     n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays))
-    _small_font_size_est = max(8, int(font_size * 0.90))
-    _small_line_h_est = _small_font_size_est + 4 + 4
-    _overlay_header_h_est = _small_line_h_est if (show_overlay_header and n_bottom_rows > 0) else 0
-    bottom_extra_h = _overlay_header_h_est + (_small_line_h_est - 2) * n_bottom_rows if n_bottom_rows > 0 else 0
+
+    small_font_size = max(8, int(font_size * 0.90))
+    small_font_name = custom.get("font_name", "")
+    small_font = None
+    if small_font_name:
+        try:
+            small_font = ImageFont.truetype(small_font_name, small_font_size)
+        except Exception:
+            pass
+    if small_font is None:
+        for fallback in (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "DejaVuSans-Bold.ttf",
+        ):
+            try:
+                small_font = ImageFont.truetype(fallback, small_font_size)
+                break
+            except Exception:
+                continue
+    if small_font is None:
+        small_font = ImageFont.load_default()
+
+    small_ascent, small_descent = small_font.getmetrics()
+    small_line_h = small_ascent + small_descent + 4
+
+    overlay_header_h_calc = small_line_h if (show_overlay_header and n_bottom_rows > 0) else 0
+    bottom_extra_h = (overlay_header_h_calc + (small_line_h - 2) * n_bottom_rows + 4) if n_bottom_rows > 0 else 0
     height = header_h + line_h * len(lines) + 10 + bottom_extra_h
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
@@ -802,31 +826,6 @@ def generate_custom_pinned_image():
 
         max_w = max(max_w, rightmost_x)
 
-    small_font_size = max(8, int(font_size * 0.90))
-    small_font = None
-    font_name_val = custom.get("font_name", "")
-    if font_name_val:
-        try:
-            small_font = ImageFont.truetype(font_name_val, small_font_size)
-        except Exception:
-            pass
-    if small_font is None:
-        for fallback in (
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-            "DejaVuSans-Bold.ttf",
-        ):
-            try:
-                small_font = ImageFont.truetype(fallback, small_font_size)
-                break
-            except Exception:
-                continue
-    if small_font is None:
-        small_font = ImageFont.load_default()
-
-    small_ascent, small_descent = small_font.getmetrics()
-    small_line_h = small_ascent + small_descent + 4
-
     actual_left = None
     actual_right = None
     for parts in lines[-1:]:
@@ -874,7 +873,7 @@ def generate_custom_pinned_image():
     if n_overlay_rows == 0:
         pass
     else:
-        overlay_header_h = small_line_h if show_overlay_header else 0
+        overlay_header_h = overlay_header_h_calc
         base_y = header_h + line_h * len(lines) + 10
 
         first_err_x = None
