@@ -19,7 +19,7 @@ fi
 
 FULL_PATH="$(pwd)/venv/bin/python"
 
-$FULL_PATH - <<EOF
+"$FULL_PATH" - <<'EOF'
 try:
     import pip
 except ImportError:
@@ -30,7 +30,7 @@ except ImportError:
     print("  $FULL_PATH get-pip.py")
 EOF
 
-$FULL_PATH - <<EOF
+"$FULL_PATH" - <<'EOF'
 import sys
 RED='\033[1;31m'
 NC='\033[0m'
@@ -46,8 +46,8 @@ except ImportError:
 EOF
 
 echo "Installing required Python packages..."
-$FULL_PATH -m pip install --upgrade pip
-$FULL_PATH -m pip install -r requirements.txt
+"$FULL_PATH" -m pip install --upgrade pip
+"$FULL_PATH" -m pip install -r requirements.txt
 
 echo
 echo -e "${GREEN}Installation complete!${NC}"
@@ -58,20 +58,22 @@ if [ -f "NBTrackr-imgpin.py" ] && [ -f "Customizer-imgpin.py" ] && [ ! -f "NBTra
     echo -e "${CYAN}Customizer-imgpin.py${NC} is the script for customizing NBTrackr."
     echo
     echo "Run the scripts from inside the current directory:"
-    echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: ./venv/bin/python NBTrackr-imgpin.py"
-    echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: ./venv/bin/python Customizer-imgpin.py" 
+    echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: \"./venv/bin/python\" \"NBTrackr-imgpin.py\""
+    echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: \"./venv/bin/python\" \"Customizer-imgpin.py\""
     echo
     echo "Run from anywhere (full path):"
-    echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: $FULL_PATH $(pwd)/NBTrackr-imgpin.py" 
-    echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: $FULL_PATH $(pwd)/Customizer-imgpin.py" 
+    echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: \"${FULL_PATH}\" \"$(pwd)/NBTrackr-imgpin.py\""
+    echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: \"${FULL_PATH}\" \"$(pwd)/Customizer-imgpin.py\""
+
 elif [ -f "NBTrackr-Notif.py" ] && [ ! -f "NBTrackr-imgpin.py" ] && [ ! -f "Customizer-imgpin.py" ]; then
     echo -e "${CYAN}NBTrackr-Notif.py${NC} is the main script for running NBTrackr."
     echo
     echo "Run the script from inside the current directory:"
-    echo -e "  ./venv/bin/python NBTrackr-Notif.py"
+    echo -e "  \"./venv/bin/python\" \"NBTrackr-Notif.py\""
     echo
     echo "Run from anywhere (full path):"
-    echo -e "  $FULL_PATH $(pwd)/NBTrackr-Notif.py"
+    echo -e "  \"${FULL_PATH}\" \"$(pwd)/NBTrackr-Notif.py\""
+
 else
     echo "Warning: Could not detect which NBTrackr scripts are present in this folder."
 fi
