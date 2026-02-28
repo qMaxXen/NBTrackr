@@ -212,7 +212,14 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     player_z = PREVIEW_PLAYER["zInOverworld"]
     h_ang    = PREVIEW_PLAYER["horizontalAngle"]
 
-    adj_count_overlays   = [("100.21", "+2", 2), ("98.43", "-1", -1)] if show_adj else []
+    if show_adj:
+        adj_count_overlays = [
+            ("100.21", "+2", 2),
+            ("98.43", "-1", -1),
+            ("99.00", None, None)
+        ]
+    else:
+        adj_count_overlays = []
     angle_error_overlays = [("0.0002",), ("-0.0015",)] if show_angle_error else []
     n_bottom_rows  = max(len(adj_count_overlays), len(angle_error_overlays))
     bottom_extra_h = (line_h + 4) * n_bottom_rows

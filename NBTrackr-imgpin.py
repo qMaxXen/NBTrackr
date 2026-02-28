@@ -592,9 +592,13 @@ def generate_custom_pinned_image():
                 nb_settings   = get_ninjabrainbot_settings()
                 increments    = calculate_correction_increments(correction, nb_settings)
                 log("Throw", pred_idx, "adj count:", increments)
+
                 if increments != 0:
                     sign = "+" if increments >= 0 else ""
                     adj_count_overlays.append((f"{angle_without:.2f}", f"{sign}{increments}", increments))
+                else:
+                    adj_count_overlays.append((f"{angle_without:.2f}", None, None))
+                    log("Throw", pred_idx, "adj count: zero -> will display angleWithoutCorrection only")
             if show_angle_error:
                 error_val = throw.get("error", None)
                 if error_val is not None:
@@ -886,18 +890,27 @@ def generate_custom_pinned_image():
 
             if oi < len(adj_count_overlays):
                 angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
-                adj_fill = ADJ_COUNT_POSITIVE if adj_raw >= 0 else ADJ_COUNT_NEGATIVE
+
                 angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
-                count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+                if count_txt is not None:
+                    count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+                else:
+                    count_w = 0
+
                 total_w = angle_w + count_w
+
                 if oi == 0:
                     adj_x = actual_right - total_w
                     first_adj_x = adj_x
                     first_adj_total_w = total_w
                 else:
                     adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
+
                 draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgb)
-                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
+
+                if count_txt is not None:
+                    adj_fill = ADJ_COUNT_POSITIVE if (adj_raw is None or adj_raw >= 0) else ADJ_COUNT_NEGATIVE
+                    draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
 
             if oi < len(angle_error_overlays):
                 err_txt = angle_error_overlays[oi][0]
