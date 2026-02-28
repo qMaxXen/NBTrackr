@@ -316,7 +316,7 @@ def generate_custom_pinned_image():
             line2_post = f" chance of <{int(highroll_thresh)} block blind"
             
             improve_deg = math.degrees(improve_dir)
-            line3 = f"Head {improve_deg:.0f}°, {int(improve_dist)} blocks away, for better coords."
+            line3 = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
             
             font_name = custom.get("font_name", "")
             font = None

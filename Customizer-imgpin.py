@@ -562,7 +562,7 @@ def render_blind_preview(settings: dict) -> Image.Image:
     line1_eval     = eval_text
     highroll_txt   = f"{highroll_prob:.1f}%"
     line2_post     = f" chance of <{int(highroll_thresh)} block blind"
-    line3          = f"Head {improve_deg:.0f}°, {int(improve_dist)} blocks away, for better coords."
+    line3          = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     def tw(t): return dummy.textbbox((0, 0), t, font=font)[2]
