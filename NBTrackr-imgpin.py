@@ -1023,7 +1023,8 @@ def check_and_update(current_version):
         print(f"\n[Updater] Update completed. New version extracted to:")
         print(f"    {folder_path}")
         print("[Updater] To finish setup, navigate to the new folder and run:")
-        print("    ./install.sh")
+        print("    chmod +x install.sh  # Make script executable")
+        print("    ./install.sh         # Run installer")
         sys.exit(0)
     except Exception as e:
         print(f"[Updater] Update failed: {e}")
