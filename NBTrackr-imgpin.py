@@ -583,27 +583,31 @@ def generate_custom_pinned_image():
         if parts:
             lines.append(parts)
 
-        if eye_throws and pred_idx < len(eye_throws):
-            throw = eye_throws[pred_idx]
+    adj_count_overlays = []  
+    angle_error_overlays = [] 
+
+    if eye_throws:
+        for throw_idx, throw in enumerate(eye_throws):
             if show_adj_count:
                 angle_with    = throw.get("angle", 0.0)
                 angle_without = throw.get("angleWithoutCorrection", 0.0)
                 correction    = angle_with - angle_without
                 nb_settings   = get_ninjabrainbot_settings()
                 increments    = calculate_correction_increments(correction, nb_settings)
-                log("Throw", pred_idx, "adj count:", increments)
+                log("Throw", throw_idx, "adj count:", increments)
 
                 if increments != 0:
                     sign = "+" if increments >= 0 else ""
                     adj_count_overlays.append((f"{angle_without:.2f}", f"{sign}{increments}", increments))
                 else:
                     adj_count_overlays.append((f"{angle_without:.2f}", None, None))
-                    log("Throw", pred_idx, "adj count: zero -> will display angleWithoutCorrection only")
+                    log("Throw", throw_idx, "adj count: zero -> will display angleWithoutCorrection only")
+
             if show_angle_error:
                 error_val = throw.get("error", None)
                 if error_val is not None:
                     angle_error_overlays.append((f"{error_val:.4f}",))
-                    log("Throw", pred_idx, "angle error:", error_val)
+                    log("Throw", throw_idx, "angle error:", error_val)
 
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
