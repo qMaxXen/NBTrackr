@@ -37,6 +37,8 @@ _nb_settings_cache = None
 _nb_settings_cache_time = 0
 NB_SETTINGS_CACHE_TTL = 60.0
 
+_last_custom_mtime = 0
+
 def get_customizations():
     global _cached_customizations
     if _cached_customizations is not None:
@@ -183,11 +185,16 @@ def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
 def generate_custom_pinned_image():
     global _last_custom, _last_boat, _last_stronghold, _last_blind
 
-    global _cached_customizations
+    global _cached_customizations, _last_custom_mtime
     try:
-        with open(CUSTOMIZATIONS_FILE, "r") as f:
-            custom = json.load(f)
-        _cached_customizations = custom  
+        mtime = os.path.getmtime(CUSTOMIZATIONS_FILE)
+        if _cached_customizations is not None and mtime == _last_custom_mtime:
+            custom = _cached_customizations
+        else:
+            with open(CUSTOMIZATIONS_FILE, "r") as f:
+                custom = json.load(f)
+            _cached_customizations = custom
+            _last_custom_mtime = mtime
     except Exception as e:
         log("Failed to read customizations:", e)
         return
