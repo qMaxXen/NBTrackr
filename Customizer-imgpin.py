@@ -663,157 +663,158 @@ def pick_color(var):
     win.resizable(False, False)
     win.grab_set()
 
-    WHEEL_SIZE = 220
-    STRIP_W    = 28
-    PAD        = 10
+    SQ   = 220        
+    HUE_H = 22         
+    PAD  = 12
 
-    state = {"h": init_h, "s": init_s, "v": init_v, "dragging_wheel": False, "dragging_strip": False}
+    state = {"h": init_h, "s": init_s, "v": init_v,
+             "dragging_sq": False, "dragging_hue": False}
 
-    canvas = tk.Canvas(win, width=WHEEL_SIZE + PAD + STRIP_W + PAD*2,
-                       height=WHEEL_SIZE + PAD*2 + 40, highlightthickness=0)
-    canvas.pack(padx=10, pady=10)
+    total_w = PAD + SQ + PAD
+    total_h = PAD + SQ + PAD + HUE_H + PAD + 30 + PAD + 36
 
-    def make_wheel_image(size, v):
+    canvas = tk.Canvas(win, width=total_w, height=total_h, highlightthickness=0)
+    canvas.pack(padx=0, pady=0)
+
+    SQ_X  = PAD
+    SQ_Y  = PAD
+    HUE_X = PAD
+    HUE_Y = PAD + SQ + PAD
+
+    _sq_tk   = [None]
+    _hue_tk  = [None]
+    _sw_tk   = [None]
+
+    def make_sq_image(size, hue):
         import colorsys
-        img = Image.new("RGB", (size, size), (40, 40, 40))
-        cx, cy, r = size/2, size/2, size/2 - 2
-        pixels = img.load()
+        img = Image.new("RGB", (size, size))
+        px  = img.load()
+        hue_rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        hr, hg, hb = hue_rgb[0]*255, hue_rgb[1]*255, hue_rgb[2]*255
         for py in range(size):
-            for px in range(size):
-                dx, dy = px - cx, py - cy
-                dist = math.sqrt(dx*dx + dy*dy)
-                if dist <= r:
-                    angle = (math.degrees(math.atan2(dy, dx)) + 360) % 360
-                    h = angle / 360.0
-                    s = dist / r
-                    rgb = colorsys.hsv_to_rgb(h, s, v)
-                    pixels[px, py] = (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            v_factor = 1.0 - py / (size - 1)    
+            for pxx in range(size):
+                s_factor = pxx / (size - 1)     
+                r = int((1 - s_factor) * 255 * v_factor + s_factor * hr * v_factor)
+                g = int((1 - s_factor) * 255 * v_factor + s_factor * hg * v_factor)
+                b = int((1 - s_factor) * 255 * v_factor + s_factor * hb * v_factor)
+                px[pxx, py] = (r, g, b)
         return img
 
-    def make_strip_image(w, h, hue, sat):
+    def make_hue_image(w, h):
         import colorsys
         img = Image.new("RGB", (w, h))
-        pixels = img.load()
-        for py in range(h):
-            v = 1.0 - py / (h - 1)
-            rgb = colorsys.hsv_to_rgb(hue, sat, v)
-            for px in range(w):
-                pixels[px, py] = (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+        px  = img.load()
+        for pxx in range(w):
+            hue = pxx / (w - 1)
+            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            col = (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+            for py in range(h):
+                px[pxx, py] = col
         return img
-
-    _wheel_tk  = [None]
-    _strip_tk  = [None]
-    _swatch_tk = [None]
-
-    WX = PAD
-    WY = PAD
-    SX = PAD + WHEEL_SIZE + PAD
-    SY = PAD
 
     def redraw_all():
         import colorsys
         h, s, v = state["h"], state["s"], state["v"]
 
-        wheel_img = make_wheel_image(WHEEL_SIZE, v)
-        _wheel_tk[0] = ImageTk.PhotoImage(wheel_img)
-        canvas.delete("wheel")
-        canvas.create_image(WX, WY, anchor="nw", image=_wheel_tk[0], tags="wheel")
+        sq_img = make_sq_image(SQ, h)
+        _sq_tk[0] = ImageTk.PhotoImage(sq_img)
+        canvas.delete("sq")
+        canvas.create_image(SQ_X, SQ_Y, anchor="nw", image=_sq_tk[0], tags="sq")
 
-        cx, cy = WX + WHEEL_SIZE/2, WY + WHEEL_SIZE/2
-        r = WHEEL_SIZE/2 - 2
-        marker_angle = h * 360
-        mx = cx + r * s * math.cos(math.radians(marker_angle))
-        my = cy + r * s * math.sin(math.radians(marker_angle))
+        mx = SQ_X + s * (SQ - 1)
+        my = SQ_Y + (1.0 - v) * (SQ - 1)
         canvas.delete("cross")
         canvas.create_oval(mx-6, my-6, mx+6, my+6, outline="white", width=2, tags="cross")
         canvas.create_oval(mx-7, my-7, mx+7, my+7, outline="black", width=1, tags="cross")
 
-        strip_img = make_strip_image(STRIP_W, WHEEL_SIZE, h, s)
-        _strip_tk[0] = ImageTk.PhotoImage(strip_img)
-        canvas.delete("strip")
-        canvas.create_image(SX, SY, anchor="nw", image=_strip_tk[0], tags="strip")
+        hue_img = make_hue_image(SQ, HUE_H)
+        _hue_tk[0] = ImageTk.PhotoImage(hue_img)
+        canvas.delete("hue")
+        canvas.create_image(HUE_X, HUE_Y, anchor="nw", image=_hue_tk[0], tags="hue")
 
-        sy_marker = SY + int((1.0 - v) * (WHEEL_SIZE - 1))
-        canvas.delete("strip_marker")
-        canvas.create_line(SX-2, sy_marker, SX+STRIP_W+2, sy_marker, fill="white", width=2, tags="strip_marker")
-        canvas.create_line(SX-2, sy_marker, SX+STRIP_W+2, sy_marker, fill="black", width=1, tags="strip_marker")
+        hx = HUE_X + int(h * (SQ - 1))
+        canvas.delete("hue_marker")
+        canvas.create_line(hx, HUE_Y - 2, hx, HUE_Y + HUE_H + 2,
+                           fill="white", width=2, tags="hue_marker")
+        canvas.create_line(hx, HUE_Y - 2, hx, HUE_Y + HUE_H + 2,
+                           fill="black", width=1, tags="hue_marker")
 
         rgb = colorsys.hsv_to_rgb(h, s, v)
-        hex_str = "#{:02X}{:02X}{:02X}".format(int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
+        rc, gc, bc = int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)
+        hex_str = "#{:02X}{:02X}{:02X}".format(rc, gc, bc)
+        sw_y = HUE_Y + HUE_H + PAD
+        sw_img = Image.new("RGB", (SQ, 28), (rc, gc, bc))
+        _sw_tk[0] = ImageTk.PhotoImage(sw_img)
         canvas.delete("swatch")
-        swatch_y = WY + WHEEL_SIZE + 8
-        swatch_img = Image.new("RGB", (WHEEL_SIZE + PAD + STRIP_W, 24), (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)))
-        _swatch_tk[0] = ImageTk.PhotoImage(swatch_img)
-        canvas.create_image(WX, swatch_y, anchor="nw", image=_swatch_tk[0], tags="swatch")
+        canvas.create_image(SQ_X, sw_y, anchor="nw", image=_sw_tk[0], tags="swatch")
+        luma = 0.299*rc + 0.587*gc + 0.114*bc
         canvas.delete("hexlabel")
-        canvas.create_text(WX + (WHEEL_SIZE + PAD + STRIP_W)//2, swatch_y + 12,
-                           text=hex_str, fill="white" if v < 0.6 else "black",
+        canvas.create_text(SQ_X + SQ//2, sw_y + 14, text=hex_str,
+                           fill="white" if luma < 140 else "black",
                            font=("Helvetica", 10, "bold"), tags="hexlabel")
         hex_var.set(hex_str)
 
-    def wheel_pick(ex, ey):
-        import colorsys
-        cx, cy = WX + WHEEL_SIZE/2, WY + WHEEL_SIZE/2
-        r = WHEEL_SIZE/2 - 2
-        dx, dy = ex - cx, ey - cy
-        dist = math.sqrt(dx*dx + dy*dy)
-        angle = (math.degrees(math.atan2(dy, dx)) + 360) % 360
-        state["h"] = angle / 360.0
-        state["s"] = min(dist / r, 1.0)
+    def sq_pick(ex, ey):
+        s = max(0.0, min(1.0, (ex - SQ_X) / (SQ - 1)))
+        v = max(0.0, min(1.0, 1.0 - (ey - SQ_Y) / (SQ - 1)))
+        state["s"], state["v"] = s, v
         redraw_all()
 
-    def strip_pick(ey):
-        v = 1.0 - max(0.0, min(1.0, (ey - SY) / (WHEEL_SIZE - 1)))
-        state["v"] = v
+    def hue_pick(ex):
+        state["h"] = max(0.0, min(1.0, (ex - HUE_X) / (SQ - 1)))
         redraw_all()
 
     def on_press(e):
-        if WX <= e.x <= WX+WHEEL_SIZE and WY <= e.y <= WY+WHEEL_SIZE:
-            state["dragging_wheel"] = True
-            wheel_pick(e.x, e.y)
-        elif SX <= e.x <= SX+STRIP_W and SY <= e.y <= SY+WHEEL_SIZE:
-            state["dragging_strip"] = True
-            strip_pick(e.y)
+        if SQ_X <= e.x <= SQ_X+SQ and SQ_Y <= e.y <= SQ_Y+SQ:
+            state["dragging_sq"] = True
+            sq_pick(e.x, e.y)
+        elif HUE_X <= e.x <= HUE_X+SQ and HUE_Y <= e.y <= HUE_Y+HUE_H:
+            state["dragging_hue"] = True
+            hue_pick(e.x)
 
     def on_drag(e):
-        if state["dragging_wheel"]:
-            wheel_pick(e.x, e.y)
-        elif state["dragging_strip"]:
-            strip_pick(e.y)
+        if state["dragging_sq"]:
+            sq_pick(e.x, e.y)
+        elif state["dragging_hue"]:
+            hue_pick(e.x)
 
     def on_release(e):
-        state["dragging_wheel"] = False
-        state["dragging_strip"] = False
+        state["dragging_sq"]  = False
+        state["dragging_hue"] = False
 
     canvas.bind("<ButtonPress-1>",   on_press)
     canvas.bind("<B1-Motion>",       on_drag)
     canvas.bind("<ButtonRelease-1>", on_release)
 
     hex_var = tk.StringVar()
+    sw_y_tk = HUE_Y + HUE_H + PAD + 28 + 6
+
     hex_frame = tk.Frame(win)
-    hex_frame.pack(pady=(0, 5))
+    hex_frame.pack(pady=(4, 0))
     tk.Label(hex_frame, text="Hex:").pack(side="left")
     hex_entry = tk.Entry(hex_frame, textvariable=hex_var, width=10)
     hex_entry.pack(side="left", padx=4)
 
-    def on_hex_enter(e=None):
+    def on_hex_commit(e=None):
         import colorsys
         val = hex_var.get().strip()
         try:
             s2 = val.lstrip("#")
-            if len(s2) != 6: return
-            r2,g2,b2 = int(s2[0:2],16)/255, int(s2[2:4],16)/255, int(s2[4:6],16)/255
-            h2,s3,v2 = colorsys.rgb_to_hsv(r2,g2,b2)
+            if len(s2) != 6:
+                return
+            r2, g2, b2 = int(s2[0:2],16)/255, int(s2[2:4],16)/255, int(s2[4:6],16)/255
+            h2, s3, v2 = colorsys.rgb_to_hsv(r2, g2, b2)
             state["h"], state["s"], state["v"] = h2, s3, v2
             redraw_all()
         except Exception:
             pass
 
-    hex_entry.bind("<Return>", on_hex_enter)
-    hex_entry.bind("<FocusOut>", on_hex_enter)
+    hex_entry.bind("<Return>",   on_hex_commit)
+    hex_entry.bind("<FocusOut>", on_hex_commit)
 
     btn_row = tk.Frame(win)
-    btn_row.pack(pady=(0, 10))
+    btn_row.pack(pady=(4, 10))
 
     def on_ok():
         var.set(hex_var.get())
