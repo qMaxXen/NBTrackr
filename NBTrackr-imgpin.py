@@ -58,7 +58,7 @@ def _load_advanced_settings():
             float(data.get("max_api_polling_rate", 0.15)),
         )
     except Exception:
-        return False, 0.3, 0.15
+        return False, 0.2, 0.05
 
 DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
 

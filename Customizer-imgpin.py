@@ -80,8 +80,8 @@ DEFAULT_CUSTOMIZATIONS = {
         "nether_coords": "Text"
     },
     "debug_mode": False,
-    "idle_api_polling_rate": 0.3,
-    "max_api_polling_rate": 0.15
+    "idle_api_polling_rate": 0.2,
+    "max_api_polling_rate": 0.05
 }
 
 DISPLAY_NAMES = {
@@ -1147,7 +1147,7 @@ def main():
                                                    DEFAULT_CUSTOMIZATIONS["idle_api_polling_rate"]))
     idle_rate_entry = tk.Entry(f_idle, textvariable=idle_rate_var, width=8)
     idle_rate_entry.pack(side="left", padx=5)
-    idle_rate_hint = tk.Label(adv, text="  Default 0.3s. Higher value = lower CPU usage when idle.",
+    idle_rate_hint = tk.Label(adv, text="  Default 0.2s. Higher value = lower CPU usage when idle.",
                               anchor="w", fg="#666666", font=("Helvetica", 9, "italic"))
     idle_rate_hint.pack(fill="x", pady=(0, 5))
 
@@ -1157,7 +1157,7 @@ def main():
                                                   DEFAULT_CUSTOMIZATIONS["max_api_polling_rate"]))
     max_rate_entry = tk.Entry(f_max, textvariable=max_rate_var, width=8)
     max_rate_entry.pack(side="left", padx=5)
-    max_rate_hint = tk.Label(adv, text="  Default 0.15s. The program will never poll slower than this.",
+    max_rate_hint = tk.Label(adv, text="  Default 0.05s. The program will never poll slower than this.",
                              anchor="w", fg="#666666", font=("Helvetica", 9, "italic"))
     max_rate_hint.pack(fill="x", pady=(0, 5))
 
