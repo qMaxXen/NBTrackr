@@ -166,7 +166,7 @@ def _load_preview_font(font_name, font_size):
 PREVIEW_EYE_DATA = [
     {"chunkX": 23,  "chunkZ": -41, "certainty": 0.812, "overworldDistance": 847.0},
     {"chunkX": 24,  "chunkZ": -42, "certainty": 0.134, "overworldDistance": 851.0},
-    {"chunkX": 22,  "chunkZ": -41, "certainty": 0.054, "overworldDistance": 843.0},
+    {"chunkX": 22,  "chunkZ": -41, "certainty": 0.054, "overworldDistance": 123.0},
     {"chunkX": -12, "chunkZ": 38,  "certainty": 0.000, "overworldDistance": 1203.0},
     {"chunkX": 31,  "chunkZ": -55, "certainty": 0.000, "overworldDistance": 962.0},
 ]
