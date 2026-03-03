@@ -1229,6 +1229,7 @@ image_queue = queue.Queue(maxsize=1)
 status_lock = threading.Lock()
 status = {
     "boatState": None,
+    "boatAngle": None,
     "resultType": None,
     "isInNether": False,
     "lastShown": None,
@@ -1274,8 +1275,9 @@ def api_polling_thread():
             stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=0.5).json()
             blind_resp = requests.get("http://localhost:52533/api/v1/blind", timeout=0.5).json()
 
-            boat_state = boat_resp.get("boatState")
-            result_type = stronghold_resp.get("resultType")
+            boat_state   = boat_resp.get("boatState")
+            boat_angle   = boat_resp.get("boatAngle", None)
+            result_type  = stronghold_resp.get("resultType")
             player_angle = stronghold_resp.get("playerPosition", {}).get("horizontalAngle")
             is_in_nether = stronghold_resp.get("playerPosition", {}).get("isInNether", False)
 
@@ -1292,6 +1294,7 @@ def api_polling_thread():
                 prev_blind_enabled = status["blindModeEnabled"]
 
                 status["boatState"] = boat_state
+                status["boatAngle"] = boat_angle
                 status["resultType"] = result_type
                 status["isInNether"] = is_in_nether
                 status["blindModeEnabled"] = blind_enabled
@@ -1329,7 +1332,11 @@ def api_polling_thread():
 
                 if result_type in ("NONE", "BLIND") and boat_state in ("VALID", "ERROR"):
                     if boat_state == "VALID":
-                        if boat_state != prev_state:
+                        if boat_angle == 0:
+                            status["lastShown"] = None
+                            status["showUntil"] = 0
+                            status["lastAngle"] = None
+                        elif boat_state != prev_state:
                             status["lastShown"] = boat_state
                             status["showUntil"] = now + 10
                             status["lastAngle"] = None
@@ -1406,10 +1413,11 @@ def image_loader_thread():
 
     while True:
         with status_lock:
-            boat_state = status["boatState"]
-            result_type = status["resultType"]
-            last_shown = status["lastShown"]
-            show_until = status["showUntil"]
+            boat_state   = status["boatState"]
+            boat_angle   = status["boatAngle"]
+            result_type  = status["resultType"]
+            last_shown   = status["lastShown"]
+            show_until   = status["showUntil"]
             is_in_nether = status["isInNether"]
             now = time.time()
 
@@ -1418,7 +1426,7 @@ def image_loader_thread():
 
         if not USE_CUSTOM_PINNED_IMAGE:
             if not is_in_nether and result_type in ("NONE", "BLIND"):
-                if last_shown == "VALID" and now < show_until:
+                if last_shown == "VALID" and now < show_until and boat_angle != 0:
                     path = GREEN_IMG
                     decision_reason = "Showing GREEN boat image"
                 elif last_shown == "ERROR" and now < show_until:
