@@ -58,6 +58,8 @@ DEFAULT_CUSTOMIZATIONS = {
     "text_color": "#FFFFFF",
     "negative_coords_color_enabled": True,
     "negative_coords_color": "#BA6669",
+    "portal_distance_color_enabled": True,
+    "portal_distance_color": "#FFA500",
     "text_order": [
         "overworld_coords",
         "certainty_percentage",
@@ -91,8 +93,6 @@ DISPLAY_NAMES = {
     "overworld_coords": "Overworld Coords",
     "nether_coords": "Nether Coords"
 }
-
-# ── Shared colour helpers (mirrors NBTrackr-imgpin.py) ───────────────────────
 
 def _hex_to_rgb(hexstr, fallback=(0, 0, 0)):
     try:
@@ -179,6 +179,8 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     text_rgb    = _hex_to_rgb(text_hex, (0, 0, 0))
     neg_coords_enabled = settings.get("negative_coords_color_enabled", False)
     neg_coords_rgb     = _hex_to_rgb(settings.get("negative_coords_color", "#BA6669"), (204, 110, 114))
+    portal_dist_enabled = settings.get("portal_distance_color_enabled", True)
+    portal_dist_rgb     = _hex_to_rgb(settings.get("portal_distance_color", "#FFA500"), (255, 165, 0))
     bg_rgba     = (*bg_rgb, 255)
 
     shown_count = settings.get("shown_measurements", 1)
@@ -417,7 +419,10 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
             elif kind == "distance":
                 txt, dval = val
-                fill = (255, 165, 0) if (not in_nether and dval <= 193) else text_rgb
+                if portal_dist_enabled and not in_nether and dval is not None and dval <= 193:
+                    fill = portal_dist_rgb
+                else:
+                    fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
             elif kind == "coords":
@@ -708,6 +713,8 @@ def _collect_eye_settings(vars_dict: dict) -> dict:
         "text_color":                    vars_dict["text_var"].get(),
         "negative_coords_color_enabled": vars_dict["neg_coords_enabled_var"].get(),
         "negative_coords_color":         vars_dict["neg_coords_color_var"].get(),
+        "portal_distance_color_enabled": vars_dict["portal_dist_enabled_var"].get(),
+        "portal_distance_color":         vars_dict["portal_dist_color_var"].get(),
         "font_name":                     font_name,
         "font_size":                     font_size,
         "shown_measurements":            vars_dict["shown_var"].get(),
@@ -908,6 +915,23 @@ def main():
                                       command=lambda: pick_color(neg_coords_color_var))
     neg_coords_choose_btn.pack(side="left")
 
+    f_portal_dist = tk.Frame(g); f_portal_dist.pack(fill="x", pady=(2, 5))
+    portal_dist_enabled_var = tk.BooleanVar(value=custom.get("portal_distance_color_enabled", True))
+    portal_dist_checkbox = tk.Checkbutton(f_portal_dist, variable=portal_dist_enabled_var,
+                                        relief="flat", bd=0)
+    portal_dist_checkbox.pack(side="left")
+    portal_dist_label = tk.Label(f_portal_dist,
+                                text="Display overworld distance in a different color when portal link",
+                                anchor="w")
+    portal_dist_label.pack(side="left", padx=(4, 0))
+    portal_dist_color_var = tk.StringVar(
+        value=custom.get("portal_distance_color", "#FFA500"))
+    portal_dist_entry = tk.Entry(f_portal_dist, textvariable=portal_dist_color_var, width=10)
+    portal_dist_entry.pack(side="left", padx=5)
+    portal_dist_choose_btn = tk.Button(f_portal_dist, text="Choose",
+                                    command=lambda: pick_color(portal_dist_color_var))
+    portal_dist_choose_btn.pack(side="left")
+
     def _update_neg_coords_state(*_):
         en_main = use_var.get()
 
@@ -925,8 +949,19 @@ def main():
         neg_coords_entry.config(state="normal" if en_neg else "disabled")
         neg_coords_choose_btn.config(state="normal" if en_neg else "disabled")
 
+    def _update_portal_dist_state(*_):
+        en_main = use_var.get()
+        portal_dist_checkbox.config(state="normal" if en_main else "disabled")
+        portal_dist_label.config(fg="#000000" if en_main else "#777777")
+        en_sub = portal_dist_enabled_var.get() and en_main
+        portal_dist_entry.config(state="normal" if en_sub else "disabled")
+        portal_dist_choose_btn.config(state="normal" if en_sub else "disabled")
+
+    portal_dist_enabled_var.trace_add("write", _update_portal_dist_state)
+
     neg_coords_enabled_var.trace_add("write", _update_neg_coords_state)
     _update_neg_coords_state()
+    _update_portal_dist_state()
 
     e = tk.Frame(tab_eye)
     e.pack(padx=10, pady=10, fill="x")
@@ -1181,6 +1216,8 @@ def main():
         "angle_error_var": angle_error_var,
         "overlay_header_var": overlay_header_var,
         "dim_var":      dim_var,
+        "portal_dist_enabled_var": portal_dist_enabled_var,
+        "portal_dist_color_var":   portal_dist_color_var,
     }
 
     def update_blind_hide_after_state(*_):
@@ -1208,6 +1245,7 @@ def main():
         text_choose_btn.config(state=color_state)
 
         _update_neg_coords_state()
+        _update_portal_dist_state()
 
         cb_shown.config(state="readonly" if en else "disabled")
         ow_coords_combo.config(state="readonly" if en else "disabled")
@@ -1286,6 +1324,8 @@ def main():
             "debug_mode": debug_var.get(),
             "idle_api_polling_rate": idle_val,
             "max_api_polling_rate": max_val,
+            "portal_distance_color_enabled": portal_dist_enabled_var.get(),
+            "portal_distance_color":         portal_dist_color_var.get().strip(),
         })
         save_customizations(custom)
         messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
@@ -1317,6 +1357,9 @@ def main():
             neg_coords_color_var.set(custom.get("negative_coords_color",
                                                   DEFAULT_CUSTOMIZATIONS["negative_coords_color"]))
             _update_neg_coords_state()
+            portal_dist_enabled_var.set(custom.get("portal_distance_color_enabled", True))
+            portal_dist_color_var.set(custom.get("portal_distance_color", "#FFA500"))
+            _update_portal_dist_state()
             debug_var.set(custom["debug_mode"])
             idle_rate_var.set(custom["idle_api_polling_rate"])
             max_rate_var.set(custom["max_api_polling_rate"])

@@ -212,6 +212,9 @@ def generate_custom_pinned_image():
     neg_coords_enabled = custom.get("negative_coords_color_enabled", False)
     neg_coords_hex     = custom.get("negative_coords_color", "#CC6E72")
     neg_coords_rgb     = hex_to_rgb(neg_coords_hex, fallback=(204, 110, 114))
+    portal_dist_enabled = custom.get("portal_distance_color_enabled", True)
+    portal_dist_hex     = custom.get("portal_distance_color", "#FFA500")
+    portal_dist_rgb     = hex_to_rgb(portal_dist_hex, fallback=(255, 165, 0))
     show_angle_error    = custom.get("show_angle_error", False)
     angle_display_mode  = custom.get("angle_display_mode", "angle_and_change")
     show_overlay_header = custom.get("show_overlay_header", False)
@@ -804,10 +807,10 @@ def generate_custom_pinned_image():
                 except Exception:
                     txt = str(val)
                     dval = None
-                if in_nether:
-                    fill = text_rgb
+                if not in_nether and portal_dist_enabled and dval is not None and dval <= 193:
+                    fill = portal_dist_rgb
                 else:
-                    fill = (255, 165, 0) if (dval is not None and dval <= 193) else text_rgb
+                    fill = text_rgb
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
             elif kind == "coords":
