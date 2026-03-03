@@ -226,15 +226,12 @@ def generate_custom_pinned_image():
     angle_display_mode  = custom.get("angle_display_mode", "angle_and_change")
     show_overlay_header = custom.get("show_overlay_header", False)
 
-    try:
-        boat_resp       = requests.get("http://localhost:52533/api/v1/boat", timeout=1).json()
-        stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=1).json()
-        blind_resp      = requests.get("http://localhost:52533/api/v1/blind", timeout=1).json()
-    except requests.exceptions.RequestException:
-        print("ERROR: Ninjabrain Bot is not open or API is not enabled in Ninjabrain Bot.")
-        return
-    except Exception as e:
-        log("API request failed in generate_custom_pinned_image:", e)
+    with status_lock:
+        boat_resp       = dict(status["boat_resp"])
+        stronghold_resp = dict(status["stronghold_resp"])
+        blind_resp      = dict(status["blind_resp"])
+
+    if not stronghold_resp:
         return
 
     boat_state  = boat_resp.get("boatState")
@@ -1240,14 +1237,14 @@ status = {
     "blindModeEnabled": False,
     "blindResult": None,
     "blindShowUntil": 0,
-    "blindCurrentlyShowing": False
+    "blindCurrentlyShowing": False,
+    "boat_resp": {},
+    "stronghold_resp": {},
+    "blind_resp": {},
 }
 
 USE_CUSTOM_PINNED_IMAGE = load_customizations()
 IMAGE_PATH = IMAGE_PATH_CUSTOM if USE_CUSTOM_PINNED_IMAGE else IMAGE_PATH_DEFAULT
-
-if USE_CUSTOM_PINNED_IMAGE:
-    generate_custom_pinned_image()
 
 def is_image_nonempty(path):
     if not (os.path.exists(path) and os.path.getsize(path) > 0):
@@ -1298,6 +1295,9 @@ def api_polling_thread():
                 status["resultType"] = result_type
                 status["isInNether"] = is_in_nether
                 status["blindModeEnabled"] = blind_enabled
+                status["boat_resp"]       = boat_resp
+                status["stronghold_resp"] = stronghold_resp
+                status["blind_resp"]      = blind_resp
                 
                 blind_changed = False
                 has_valid_result = blind_result and blind_result.get("evaluation") is not None
