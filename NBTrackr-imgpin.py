@@ -195,6 +195,7 @@ def generate_custom_pinned_image():
                 custom = json.load(f)
             _cached_customizations = custom
             _last_custom_mtime = mtime
+            log(f"[Config] Customizations reloaded from disk")
     except Exception as e:
         log("Failed to read customizations:", e)
         return
@@ -1106,7 +1107,6 @@ def place_window(width, height):
             pass
 
 def apply_overlay_from_pil(pil_img, width=None, height=None):
-    log("apply_overlay_from_pil: running on main thread")
     try:
         tk_img = ImageTk.PhotoImage(pil_img)
         label.config(image=tk_img)
@@ -1115,9 +1115,10 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
         w = int(width) if width is not None else pil_img.width
         h = int(height) if height is not None else pil_img.height
 
+        log(f"apply_overlay_from_pil: Applying overlay ({w}x{h}px)")
+
         place_window(w, h)
         show_window()
-        log("apply_overlay_from_pil: overlay applied (w=%d h=%d)" % (w, h))
     except Exception as e:
         log("apply_overlay_from_pil: failed to apply overlay:", e)
 
@@ -1175,7 +1176,7 @@ def load_customizations():
     return False
 
 if __name__ == "__main__":
-    print(f"NBTrackr version: {APP_VERSION}")
+    print(f"NBTrackr version: {APP_VERSION}\n")
 
     latest = check_for_update(APP_VERSION)
     if latest:
@@ -1269,11 +1270,19 @@ def idle_update_frequency():
     return IDLE_API_POLLING_RATE
 
 def api_polling_thread():
+    _nb_was_connected = False
+    _nb_error_printed = False
+
     while True:
         try:
             boat_resp = requests.get("http://localhost:52533/api/v1/boat", timeout=0.5).json()
             stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=0.5).json()
             blind_resp = requests.get("http://localhost:52533/api/v1/blind", timeout=0.5).json()
+
+            if not _nb_was_connected:
+                print("Connected to Ninjabrain Bot.")
+                _nb_was_connected = True
+                _nb_error_printed = False
 
             boat_state   = boat_resp.get("boatState")
             boat_angle   = boat_resp.get("boatAngle", None)
@@ -1359,8 +1368,17 @@ def api_polling_thread():
                     status["lastAngle"] = None
 
         except Exception:
+            if _nb_was_connected:
+                print("ERROR: Lost connection to Ninjabrain Bot.")
+                _nb_was_connected = False
+                _nb_error_printed = False
+            if not _nb_error_printed:
+                print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
+                _nb_error_printed = True
+
             with status_lock:
                 status["boatState"] = None
+                status["boatAngle"] = None
                 status["resultType"] = None
                 status["isInNether"] = False
                 status["lastShown"] = None
@@ -1410,6 +1428,8 @@ def image_loader_thread():
     last_logged_state = None
     last_used_path = None
     last_mod_time = 0
+    _nb_overlay_error_printed = False
+    _nb_overlay_success_printed = False
 
     while True:
         with status_lock:
@@ -1435,16 +1455,36 @@ def image_loader_thread():
 
 
         if path is None and result_type in ("NONE", "BLIND") and boat_state in ("VALID", "ERROR") and now < show_until:
-            if not USE_CUSTOM_PINNED_IMAGE and is_image_nonempty(IMAGE_PATH):
-                path = IMAGE_PATH
-                decision_reason = "Showing pinned overlay image"
+            if not USE_CUSTOM_PINNED_IMAGE:
+                if is_image_nonempty(IMAGE_PATH):
+                    path = IMAGE_PATH
+                    decision_reason = "Showing pinned overlay image"
+                    if not _nb_overlay_success_printed:
+                        print("Ninjabrain Bot's overlay found.")
+                        _nb_overlay_success_printed = True
+                    _nb_overlay_error_printed = True # Don't show again
+                else:
+                    decision_reason = "Skipped pinned overlay image: nb-overlay.png empty or missing"
+                    if not _nb_overlay_error_printed and result_type is not None:
+                        print("ERROR: Ninjabrain Bot's overlay is not enabled. Enable it in Ninjabrain Bot > Settings > OBS Overlay > Enable overlay.")
+                        _nb_overlay_error_printed = True
             else:
                 decision_reason = "Skipped pinned overlay image due to custom pinned image flag"
 
         if path is None and result_type == "TRIANGULATION":
-            if not USE_CUSTOM_PINNED_IMAGE and is_image_nonempty(IMAGE_PATH):
-                path = IMAGE_PATH
-                decision_reason = "Showing overlay image for TRIANGULATION"
+            if not USE_CUSTOM_PINNED_IMAGE:
+                if is_image_nonempty(IMAGE_PATH):
+                    path = IMAGE_PATH
+                    decision_reason = "Showing overlay image for TRIANGULATION"
+                    if not _nb_overlay_success_printed:
+                        print("Ninjabrain Bot's overlay found.")
+                        _nb_overlay_success_printed = True
+                    _nb_overlay_error_printed = True # Don't show again
+                else:
+                    decision_reason = "Skipped overlay image for TRIANGULATION: nb-overlay.png empty or missing"
+                    if not _nb_overlay_error_printed and result_type is not None:
+                        print("ERROR: Ninjabrain Bot's overlay is not enabled. Enable it in Ninjabrain Bot > Settings > OBS Overlay > Enable overlay.")
+                        _nb_overlay_error_printed = True
             else:
                 decision_reason = "Skipped overlay image for TRIANGULATION due to custom pinned image flag"
 
@@ -1482,9 +1522,7 @@ def image_loader_thread():
 
         current_state = (boat_state, result_type, last_shown, is_in_nether, decision_reason)
         if current_state != last_logged_state:
-            log("Boat:", boat_state, "| Result:", result_type,
-                "| Shown:", last_shown, "| Nether:", is_in_nether,
-                "| Action:", decision_reason)
+            log(f"BoatState={boat_state} boatAngle={boat_angle} resultType={result_type} inNether={is_in_nether} shown={last_shown} action={decision_reason}")
             last_logged_state = current_state
 
         time.sleep(0.1)
