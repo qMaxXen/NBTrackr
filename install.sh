@@ -53,7 +53,7 @@ echo
 echo -e "${GREEN}Installation complete!${NC}"
 echo
 
-if [ -f "NBTrackr-imgpin.py" ] && [ -f "Customizer-imgpin.py" ] && [ ! -f "NBTrackr-Notif.py" ]; then
+if [ -f "NBTrackr-imgpin.py" ] && [ -f "Customizer-imgpin.py" ]; then
     echo -e "${CYAN}NBTrackr-imgpin.py${NC} is the main script for running NBTrackr."
     echo -e "${CYAN}Customizer-imgpin.py${NC} is the script for customizing NBTrackr."
     echo
@@ -64,15 +64,6 @@ if [ -f "NBTrackr-imgpin.py" ] && [ -f "Customizer-imgpin.py" ] && [ ! -f "NBTra
     echo "Run from anywhere (full path):"
     echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: \"${FULL_PATH}\" \"$(pwd)/NBTrackr-imgpin.py\""
     echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: \"${FULL_PATH}\" \"$(pwd)/Customizer-imgpin.py\""
-
-elif [ -f "NBTrackr-Notif.py" ] && [ ! -f "NBTrackr-imgpin.py" ] && [ ! -f "Customizer-imgpin.py" ]; then
-    echo -e "${CYAN}NBTrackr-Notif.py${NC} is the main script for running NBTrackr."
-    echo
-    echo "Run the script from inside the current directory:"
-    echo -e "  \"./venv/bin/python\" \"NBTrackr-Notif.py\""
-    echo
-    echo "Run from anywhere (full path):"
-    echo -e "  \"${FULL_PATH}\" \"$(pwd)/NBTrackr-Notif.py\""
 
 else
     echo "Warning: Could not detect which NBTrackr scripts are present in this folder."
