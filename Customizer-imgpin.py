@@ -613,11 +613,7 @@ def render_default_blind_preview() -> Image.Image:
 
     col_hdr_start = col_hdr_y0 + HDR_SEP
 
-    draw.rectangle([0, col_hdr_start + hdr_h, img_w - 1, col_hdr_start + hdr_h + HDR_SEP - 1], fill=NB_HDR_SEP_C)
-
     row_area_y = col_hdr_start + hdr_h + HDR_SEP
-
-
 
     txt_x = CELL_PAD
     txt_y = new_header_h + HDR_SEP + (body_h - th()) // 2
