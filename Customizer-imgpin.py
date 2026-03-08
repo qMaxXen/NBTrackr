@@ -197,11 +197,13 @@ def render_default_preview(settings: dict) -> Image.Image:
         font_size = 18
 
     neg_coords_enabled = settings.get("negative_coords_color_enabled", False)
+    show_adj_count     = settings.get("show_angle_adjustment_count", False)
     neg_coords_rgb     = _hex_to_rgb(settings.get("negative_coords_color", "#BA6669"), (186, 102, 105))
     ow_coords_format   = settings.get("overworld_coords_format", "four_four")
 
-    font       = _load_nb_preview_font(font_size)
-    small_font = _load_nb_preview_font(max(8, int(font_size * 0.85)))
+    user_font_path = settings.get("font_name", "")
+    font       = _load_preview_font(user_font_path, font_size)
+    small_font = _load_preview_font(user_font_path, max(8, int(font_size * 0.85)))
 
     dummy_img  = Image.new("RGBA", (1, 1))
     dummy_draw = ImageDraw.Draw(dummy_img)
@@ -297,9 +299,21 @@ def render_default_preview(settings: dict) -> Image.Image:
 
     throw_headers = ["x", "z", "Angle", "Error"]
     throw_col_widths = [tw(h, small_font) + 14 * 2 for h in throw_headers]
-    for trow in PREVIEW_EYE_THROWS:
+
+    _preview_adj = {
+        0: ("10.05", "+2", 2),
+        1: ("9.01",  "-1", -1),
+        2: ("8.04",  None, None),
+    } if show_adj_count else {}
+
+    for ti, trow in enumerate(PREVIEW_EYE_THROWS):
+        if show_adj_count and ti in _preview_adj:
+            aw_str, cnt_str, _ = _preview_adj[ti]
+            angle_cell = aw_str + (cnt_str if cnt_str else "")
+        else:
+            angle_cell = f"{trow['angle']:.1f}"
         cells = [str(int(trow["xInOverworld"])), str(int(trow["zInOverworld"])),
-                 f"{trow['angle']:.1f}", f"{trow['error']:.4f}"]
+                 angle_cell, f"{trow['error']:.4f}"]
         for i, cell in enumerate(cells):
             throw_col_widths[i] = max(throw_col_widths[i], tw(cell, small_font) + 14 * 2)
 
@@ -479,18 +493,37 @@ def render_default_preview(settings: dict) -> Image.Image:
                  f"{trow['angle']:.1f}", f"{trow['error']:.4f}"]
         for i, cell in enumerate(cells):
             cw  = throw_col_widths[i]
-            cw_ = tw(cell, small_font)
             a_s, d_s = small_font.getmetrics()
             sy  = ty + (body_h - (a_s + d_s)) // 2
-            draw.text((x + (cw - cw_) // 2, sy), cell, font=small_font, fill=NB_THROW_HDR_FG_C)
+            if i == 2 and show_adj_count and ti in _preview_adj:
+                aw_str, cnt_str, cnt_raw = _preview_adj[ti]
+                if cnt_str:
+                    adj_col = (117, 204, 108) if (cnt_raw is None or cnt_raw >= 0) else (204, 110, 114)
+                    full_w  = tw(aw_str, small_font) + tw(cnt_str, small_font)
+                    bx      = x + (cw - full_w) // 2
+                    draw.text((bx, sy), aw_str, font=small_font, fill=NB_THROW_HDR_FG_C)
+                    draw.text((bx + tw(aw_str, small_font), sy), cnt_str, font=small_font, fill=adj_col)
+                else:
+                    cw_ = tw(aw_str, small_font)
+                    draw.text((x + (cw - cw_) // 2, sy), aw_str, font=small_font, fill=NB_THROW_HDR_FG_C)
+            else:
+                cw_ = tw(cell, small_font)
+                draw.text((x + (cw - cw_) // 2, sy), cell, font=small_font, fill=NB_THROW_HDR_FG_C)
             x += cw
 
     return img
 
-def render_default_blind_preview() -> Image.Image:
+def render_default_blind_preview(settings: dict = None) -> Image.Image:
     font_size = 18
-    font       = _load_nb_preview_font(font_size)
-    small_font = _load_nb_preview_font(max(8, int(font_size * 0.85)))
+    if settings is None:
+        settings = {}
+    try:
+        font_size = int(settings.get("font_size", font_size))
+    except Exception:
+        pass
+    user_font_path = settings.get("font_name", "")
+    font       = _load_preview_font(user_font_path, font_size)
+    small_font = _load_preview_font(user_font_path, max(8, int(font_size * 0.85)))
 
     dummy_img  = Image.new("RGBA", (1, 1))
     dummy_draw = ImageDraw.Draw(dummy_img)
@@ -1434,12 +1467,16 @@ def _collect_default_settings(vars_dict: dict) -> dict:
         font_size = int(vars_dict["font_size_var"].get())
     except Exception:
         font_size = 18
+    _fv = vars_dict["font_var"].get()
+    font_name = vars_dict["system_fonts"].get(_fv, BUNDLED_FONT_PATH)
     return {
         "font_size":                     font_size,
+        "font_name":                     font_name,
         "negative_coords_color_enabled": vars_dict["neg_coords_enabled_var"].get(),
         "negative_coords_color":         vars_dict["neg_coords_color_var"].get(),
         "overworld_coords_format":       vars_dict["_OW_COORDS_KEY_FROM_DISPLAY"].get(
                                              vars_dict["ow_coords_var"].get(), "four_four"),
+        "show_angle_adjustment_count":   vars_dict["adj_count_var"].get(),
     }
 
 def _collect_blind_settings(vars_dict: dict) -> dict:
@@ -1531,7 +1568,7 @@ def open_eye_preview(vars_dict: dict):
     win.protocol("WM_DELETE_WINDOW", _on_close)
     _refresh()
 
-def open_default_blind_preview():
+def open_default_blind_preview(vars_dict: dict = None):
     win = tk.Toplevel()
     win.title("Default Blind Coords Overlay — Preview")
     win.resizable(False, False)
@@ -1549,7 +1586,8 @@ def open_default_blind_preview():
         if not _running[0] or not win.winfo_exists():
             return
         try:
-            pil_img  = render_default_blind_preview()
+            settings = _collect_default_settings(vars_dict) if vars_dict else {}
+            pil_img  = render_default_blind_preview(settings)
             tk_img   = ImageTk.PhotoImage(pil_img)
             _tk_img_ref[0] = tk_img
             lbl.config(image=tk_img)
@@ -1929,7 +1967,7 @@ def main():
 
     f_blind_prev = tk.Frame(b); f_blind_prev.pack(anchor="w", pady=(0, 10))
     tk.Button(f_blind_prev, text="Preview Blind Coords Overlay (default)",
-              command=lambda: open_default_blind_preview()).pack(side="left", padx=(0, 8))
+              command=lambda: open_default_blind_preview(_preview_vars)).pack(side="left", padx=(0, 8))
     tk.Button(f_blind_prev, text="Preview Blind Coords Overlay (custom)",
               command=lambda: open_blind_preview(_preview_vars)).pack(side="left")
     ttk.Separator(b, orient="horizontal").pack(fill="x", pady=(0, 10))
