@@ -25,6 +25,8 @@ DEFAULT_CUSTOMIZATIONS = {
     "show_coords_based_on_dimension": False,
     "show_boat_icon": True,
     "show_error_message": True,
+    "boat_info_hide_after": 10,
+    "boat_info_hide_after_enabled": True,
     "show_blind_info": True,
     "blind_info_hide_after": 20,
     "blind_info_hide_after_enabled": False,
@@ -1803,10 +1805,23 @@ def main():
     dim_checkbox.pack(side="left", padx=5)
 
     f_boat = tk.Frame(e); f_boat.pack(fill="x", pady=5)
-    boat_var = tk.BooleanVar(value=custom.get("show_boat_icon", False))
-    tk.Label(f_boat, text="Show green/red boat icon", anchor="w").pack(side="left")
+    boat_var = tk.BooleanVar(value=custom.get("show_boat_icon", True))
+    tk.Label(f_boat, text="Show green/red boat", anchor="w").pack(side="left")
     boat_checkbox = tk.Checkbutton(f_boat, variable=boat_var)
     boat_checkbox.pack(side="left", padx=5)
+
+    f_boat_sub = tk.Frame(e); f_boat_sub.pack(fill="x", pady=(0, 5))
+    boat_hide_after_enabled_var = tk.BooleanVar(value=custom.get("boat_info_hide_after_enabled", True))
+    tk.Label(f_boat_sub, text="    •", anchor="w", fg="#000000").pack(side="left")
+    boat_hide_after_check = tk.Checkbutton(f_boat_sub, variable=boat_hide_after_enabled_var)
+    boat_hide_after_check.pack(side="left")
+    boat_hide_after_label = tk.Label(f_boat_sub, text="Hide after", anchor="w")
+    boat_hide_after_label.pack(side="left", padx=(4, 5))
+    boat_hide_after_var = tk.IntVar(value=custom.get("boat_info_hide_after", 10))
+    boat_hide_spinbox = tk.Spinbox(f_boat_sub, from_=1, to=300, textvariable=boat_hide_after_var, width=5)
+    boat_hide_spinbox.pack(side="left", padx=5)
+    boat_hide_seconds_label = tk.Label(f_boat_sub, text="seconds", anchor="w")
+    boat_hide_seconds_label.pack(side="left")
 
     f_error = tk.Frame(e); f_error.pack(fill="x", pady=5)
     error_var = tk.BooleanVar(value=custom.get("show_error_message", False))
@@ -1995,7 +2010,7 @@ def main():
     }
 
     def update_blind_hide_after_state(*_):
-        blind_on = blind_info_var.get() and use_var.get()
+        blind_on = blind_info_var.get()
         blind_hide_after_check.config(state="normal" if blind_on else "disabled")
         enabled_sub = blind_hide_after_enabled_var.get() and blind_on
         sub_state = "normal" if enabled_sub else "disabled"
@@ -2005,6 +2020,20 @@ def main():
 
     blind_hide_after_enabled_var.trace_add("write", update_blind_hide_after_state)
     blind_info_var.trace_add("write", update_blind_hide_after_state)
+
+    def update_boat_hide_after_state(*_):
+        boat_on = boat_var.get()
+        boat_hide_after_check.config(state="normal" if boat_on else "disabled")
+        boat_hide_after_label.config(fg="#000000" if boat_on else "#777777")
+
+        enabled_sub = boat_hide_after_enabled_var.get() and boat_on
+        sub_state = "normal" if enabled_sub else "disabled"
+        boat_hide_spinbox.config(state=sub_state)
+        boat_hide_after_label.config(fg="#000000" if sub_state == "normal" else "#777777")
+        boat_hide_seconds_label.config(fg="#000000" if sub_state == "normal" else "#777777")
+
+    boat_hide_after_enabled_var.trace_add("write", update_boat_hide_after_state)
+    boat_var.trace_add("write", update_boat_hide_after_state)
 
     def update_state(*_):
         en = use_var.get()
@@ -2032,18 +2061,20 @@ def main():
         angle_error_checkbox.config(state="normal" if en else "disabled")
         overlay_header_checkbox.config(state="normal" if en else "disabled")
         dim_checkbox.config(state="normal" if en else "disabled")
-        boat_checkbox.config(state="normal" if en else "disabled")
+        boat_checkbox.config(state="normal")
         error_checkbox.config(state="normal" if en else "disabled")
         redraw_items()
 
-        blind_info_checkbox.config(state="normal" if en else "disabled")
+        blind_info_checkbox.config(state="normal")
         update_blind_hide_after_state()
+        update_boat_hide_after_state()
 
         idle_rate_entry.config(state="normal")
 
     use_var.trace_add("write", update_state)
     update_state()
     update_blind_hide_after_state()
+    update_boat_hide_after_state()
 
     def on_save():
         bg_val = bg_var.get().strip()
@@ -2087,6 +2118,8 @@ def main():
             "show_coords_based_on_dimension": dim_var.get(),
             "show_boat_icon": boat_var.get(),
             "show_error_message": error_var.get(),
+            "boat_info_hide_after": boat_hide_after_var.get(),
+            "boat_info_hide_after_enabled": boat_hide_after_enabled_var.get(),
             "show_blind_info": blind_info_var.get(),
             "blind_info_hide_after": blind_hide_after_var.get(),
             "blind_info_hide_after_enabled": blind_hide_after_enabled_var.get(),
@@ -2133,6 +2166,8 @@ def main():
             blind_info_var.set(custom["show_blind_info"])
             blind_hide_after_var.set(custom["blind_info_hide_after"])
             blind_hide_after_enabled_var.set(custom.get("blind_info_hide_after_enabled", False))
+            boat_hide_after_var.set(custom.get("boat_info_hide_after", 10))
+            boat_hide_after_enabled_var.set(custom.get("boat_info_hide_after_enabled", True))
             bg_var.set(custom["background_color"])
             text_var.set(custom["text_color"])
             neg_coords_enabled_var.set(custom.get("negative_coords_color_enabled", False))

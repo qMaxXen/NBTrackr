@@ -1,3 +1,4 @@
+import sys
 import tkinter as tk
 from tkinter import font
 from PIL import Image, ImageTk, UnidentifiedImageError, ImageDraw, ImageFont
@@ -260,6 +261,8 @@ def generate_default_pinned_image():
         boat_resp       = dict(status["boat_resp"])
         stronghold_resp = dict(status["stronghold_resp"])
         blind_resp      = dict(status["blind_resp"])
+        now             = time.time()
+        show_until      = status.get("showUntil", 0)
 
     if not stronghold_resp:
         root.after(0, hide_window)
@@ -291,6 +294,11 @@ def generate_default_pinned_image():
 
     user_font_path     = custom.get("font_name", "")
 
+    show_boat_icon_setting = bool(custom.get("show_boat_icon", True))
+    boat_info_hide_after_enabled_setting = bool(custom.get("boat_info_hide_after_enabled", True))
+    boat_info_hide_after_setting = float(custom.get("boat_info_hide_after", 10))
+    show_blind_info_setting = bool(custom.get("show_blind_info", True))
+
     try:
         neg_coords_enabled = bool(custom.get("negative_coords_color_enabled", False))
         neg_coords_rgb = hex_to_rgb(custom.get("negative_coords_color", "#BA6669"), (186, 102, 105))
@@ -306,7 +314,8 @@ def generate_default_pinned_image():
                  repr(blind_result), blind_enabled, font_size,
                  neg_coords_enabled, neg_coords_rgb, ow_coords_format,
                  show_adj_count, user_font_path,
-                 player_x, player_z, h_ang)
+                 player_x, player_z, h_ang,
+                 int(show_until * 10) if show_until != float("inf") else sys.maxsize)
     if (cache_key == _last_default_stronghold and
             boat_resp == _last_default_boat):
         try:
@@ -320,20 +329,58 @@ def generate_default_pinned_image():
     _last_default_boat = boat_resp
 
     if result_type == "BLIND" and blind_enabled and blind_result and blind_result.get("evaluation"):
-        img = _render_nb_stronghold(
-            preds, eye_throws, player_x, player_z, h_ang, in_nether,
-            font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
-            show_adj_count,
-            blind_result=blind_result,
-            boat_state=boat_state,
-            user_font_path=user_font_path,
-        )
-        if img is None:
-            if auto_hide_no_info:
-                root.after(0, hide_window)
+        if not show_blind_info_setting:
+            with status_lock:
+                status["blindShowUntil"] = 0
+                status["blindCurrentlyShowing"] = False
+            root.after(0, hide_window)
             return
-        _save_and_apply(img)
-        return
+
+        with status_lock:
+            current_blind_show_until = status["blindShowUntil"]
+            blind_currently_showing = status.get("blindCurrentlyShowing", False)
+
+        if current_blind_show_until == -1:
+            root.after(0, hide_window)
+            return
+
+        if not blind_currently_showing:
+            _hide_enabled = bool(custom.get("blind_info_hide_after_enabled", False))
+            _hide_after = float(custom.get("blind_info_hide_after", 20))
+            with status_lock:
+                if _hide_enabled:
+                    status["blindShowUntil"] = now + _hide_after
+                else:
+                    status["blindShowUntil"] = float("inf")
+                status["blindCurrentlyShowing"] = True
+                current_blind_show_until = status["blindShowUntil"]
+
+        if current_blind_show_until == float("inf") or now < current_blind_show_until:
+            img = _render_nb_stronghold(
+                preds, eye_throws, player_x, player_z, h_ang, in_nether,
+                font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                show_adj_count,
+                blind_result=blind_result,
+                boat_state=boat_state,
+                user_font_path=user_font_path,
+            )
+            if img is None:
+                root.after(0, hide_window)
+                return
+            _save_and_apply(img)
+            return
+        else:
+            with status_lock:
+                status["blindCurrentlyShowing"] = False
+                status["blindShowUntil"] = -1
+            root.after(0, hide_window)
+            return
+
+    if result_type != "BLIND" or not blind_enabled or not (blind_result and blind_result.get("evaluation")):
+        with status_lock:
+            if status.get("blindCurrentlyShowing", False) and not USE_CUSTOM_PINNED_IMAGE:
+                status["blindCurrentlyShowing"] = False
+                status["blindShowUntil"] = 0
 
     if result_type == "FAILED":
         img = _render_nb_stronghold(
@@ -350,6 +397,10 @@ def generate_default_pinned_image():
         return
 
     if result_type in ("NONE",) and boat_state in ("VALID", "ERROR"):
+        if not show_boat_icon_setting:
+            root.after(0, hide_window)
+            return
+
         with status_lock:
             now = time.time()
             show_until = status["showUntil"]
@@ -1043,6 +1094,8 @@ def generate_custom_pinned_image():
     show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
     show_error_message = custom.get("show_error_message", False)
+    boat_info_hide_after_enabled_setting = bool(custom.get("boat_info_hide_after_enabled", True))
+    boat_info_hide_after_setting = float(custom.get("boat_info_hide_after", 10))
     show_blind_info    = custom.get("show_blind_info", True)
     blind_hide_after   = custom.get("blind_info_hide_after", 20)
     blind_hide_after_enabled  = custom.get("blind_info_hide_after_enabled", False)
@@ -1280,7 +1333,7 @@ def generate_custom_pinned_image():
         show_until = status["showUntil"]
     now = time.time()
 
-    if show_boat_icon and result_type != "TRIANGULATION":
+    if show_boat_icon and result_type == "NONE":
         if boat_state == "VALID" and boat_angle == 0:
             root.after(0, hide_window)
             return
@@ -2128,6 +2181,7 @@ def api_polling_thread():
             blind_result = blind_resp.get("blindResult", {})
 
             with status_lock:
+                _c = get_customizations()
                 prev_state = status["lastShown"]
                 prev_angle = status["lastAngle"]
                 expired = now >= status["showUntil"]
@@ -2160,40 +2214,55 @@ def api_polling_thread():
 
                 status["blindResult"] = blind_result if has_valid_result else None
 
+                show_blind_info_setting = bool(_c.get("show_blind_info", True))
+
                 if blind_changed or (blind_enabled and not prev_blind_enabled and blind_result):
-                    _c = get_customizations()
-                    _hide_enabled = _c.get("blind_info_hide_after_enabled", False)
-                    _hide_after = _c.get("blind_info_hide_after", 20)
-                    status["blindShowUntil"] = (now + _hide_after) if _hide_enabled else float("inf")
+                    if not show_blind_info_setting:
+                        status["blindShowUntil"] = 0
+                    else:
+                        _hide_enabled = _c.get("blind_info_hide_after_enabled", False)
+                        _hide_after = _c.get("blind_info_hide_after", 20)
+                        status["blindShowUntil"] = (now + _hide_after) if _hide_enabled else float("inf")
 
                 if not blind_enabled or result_type == "TRIANGULATION":
                     if status["blindShowUntil"] > 0:
                         log("Clearing blind timer: disabled or triangulation mode")
                     status["blindShowUntil"] = 0
 
+                show_boat_icon_setting = bool(_c.get("show_boat_icon", True))
+                boat_info_hide_after_enabled_setting = bool(_c.get("boat_info_hide_after_enabled", True))
+                boat_info_hide_after_setting = float(_c.get("boat_info_hide_after", 10))
+
+                boat_hide_duration = boat_info_hide_after_setting if boat_info_hide_after_enabled_setting else float("inf")
+
                 if result_type in ("NONE", "BLIND") and boat_state in ("VALID", "ERROR"):
-                    if boat_state == "VALID":
-                        if boat_angle == 0:
-                            status["lastShown"] = None
-                            status["showUntil"] = 0
-                            status["lastAngle"] = None
-                        elif boat_state != prev_state:
-                            status["lastShown"] = boat_state
-                            status["showUntil"] = now + 10
-                            status["lastAngle"] = None
-                        elif expired:
-                            status["showUntil"] = 0
-                    elif boat_state == "ERROR":
-                        if boat_state != prev_state:
-                            status["lastShown"] = boat_state
-                            status["showUntil"] = now + 10
-                            status["lastAngle"] = player_angle
-                        elif expired:
-                            if player_angle != prev_angle:
-                                status["showUntil"] = now + 10
-                                status["lastAngle"] = player_angle
-                            else:
+                    if not show_boat_icon_setting:
+                        status["lastShown"] = None
+                        status["showUntil"] = 0
+                        status["lastAngle"] = None
+                    else:
+                        if boat_state == "VALID":
+                            if boat_angle == 0:
+                                status["lastShown"] = None
                                 status["showUntil"] = 0
+                                status["lastAngle"] = None
+                            elif boat_state != prev_state:
+                                status["lastShown"] = boat_state
+                                status["showUntil"] = now + boat_hide_duration
+                                status["lastAngle"] = None
+                            elif expired:
+                                status["showUntil"] = 0
+                        elif boat_state == "ERROR":
+                            if boat_state != prev_state:
+                                status["lastShown"] = boat_state
+                                status["showUntil"] = now + boat_hide_duration
+                                status["lastAngle"] = player_angle
+                            elif expired:
+                                if player_angle != prev_angle:
+                                    status["showUntil"] = now + boat_hide_duration
+                                    status["lastAngle"] = player_angle
+                                else:
+                                    status["showUntil"] = 0
                 else:
                     status["lastShown"] = None
                     status["showUntil"] = 0
@@ -2245,7 +2314,7 @@ def blind_timer_monitor_thread():
                 log(f"[Timer Monitor] Blind timer expired, hiding")
                 with status_lock:
                     status["blindCurrentlyShowing"] = False
-                    status["blindShowUntil"] = 0
+                    status["blindShowUntil"] = -1
                 try:
                     root.after(0, hide_window)
                 except:
