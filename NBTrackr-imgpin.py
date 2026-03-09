@@ -16,7 +16,7 @@ import tarfile
 import sys
 
 # Program Version
-APP_VERSION = "v2.3.1"
+APP_VERSION = "v2.4.0"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
