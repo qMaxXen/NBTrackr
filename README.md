@@ -34,7 +34,7 @@ A Python script that displays Ninjabrain Bot's info using a pinned image overlay
    ```
 5. Run the main script from inside the extracted folder with the following command:
    ```bash
-   "./venv/bin/python" "NBTrackr-imgpin.py"
+   ./venv/bin/python NBTrackr-imgpin.py
    ```
 > [!NOTE]
 > On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on launch. This behavior depends
@@ -49,6 +49,9 @@ Read the [FEATURES.md](https://github.com/qMaxXen/NBTrackr/blob/main/FEATURES.md
 ## Credits
 - [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
 - [Marin774](https://github.com/marin774) – for creating the [Jingle CalcOverlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which heavily inspired the GUI for `Customizer-imgpin.py`, and for generally inspiring parts of the implementation.
+
+## License
+NBTrackr is licensed under the MIT license. You can view the full license [here](https://github.com/qMaxXen/NBTrackr/blob/main/LICENSE).
 
 ---
 
