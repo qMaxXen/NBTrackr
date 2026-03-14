@@ -418,7 +418,7 @@ def generate_default_pinned_image():
                 if img is not None:
                     _save_and_apply(img)
                 else:
-                    _schedule(hide_window)
+                    _schedule(clear_overlay_image)
             elif boat_state == "VALID" and boat_angle is not None and boat_angle != 0:
                 img = _render_nb_stronghold(
                     [], [], None, None, None, False,
@@ -431,9 +431,9 @@ def generate_default_pinned_image():
                 if img is not None:
                     _save_and_apply(img)
                 else:
-                    _schedule(hide_window)
+                    _schedule(clear_overlay_image)
             else:
-                _schedule(hide_window)
+                _schedule(clear_overlay_image)
         else:
             _schedule(clear_overlay_image)
         return
