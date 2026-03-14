@@ -22,6 +22,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
+HEADLESS = "--headless" in sys.argv
 
 position_set = False
 
@@ -265,7 +266,7 @@ def generate_default_pinned_image():
         show_until      = status.get("showUntil", 0)
 
     if not stronghold_resp:
-        root.after(0, clear_overlay_image)
+        _schedule(clear_overlay_image)
         return
 
     result_type   = stronghold_resp.get("resultType")
@@ -333,7 +334,7 @@ def generate_default_pinned_image():
             with status_lock:
                 status["blindShowUntil"] = 0
                 status["blindCurrentlyShowing"] = False
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
             return
 
         with status_lock:
@@ -341,7 +342,7 @@ def generate_default_pinned_image():
             blind_currently_showing = status.get("blindCurrentlyShowing", False)
 
         if current_blind_show_until == -1:
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
             return
 
         if not blind_currently_showing:
@@ -365,7 +366,7 @@ def generate_default_pinned_image():
                 user_font_path=user_font_path,
             )
             if img is None:
-                root.after(0, clear_overlay_image)
+                _schedule(clear_overlay_image)
                 return
             _save_and_apply(img)
             return
@@ -373,7 +374,7 @@ def generate_default_pinned_image():
             with status_lock:
                 status["blindCurrentlyShowing"] = False
                 status["blindShowUntil"] = -1
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
             return
 
     if result_type != "BLIND" or not blind_enabled or not (blind_result and blind_result.get("evaluation")):
@@ -398,7 +399,7 @@ def generate_default_pinned_image():
 
     if result_type in ("NONE",) and boat_state in ("VALID", "ERROR"):
         if not show_boat_icon_setting:
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
             return
 
         with status_lock:
@@ -417,7 +418,7 @@ def generate_default_pinned_image():
                 if img is not None:
                     _save_and_apply(img)
                 else:
-                    root.after(0, hide_window)
+                    _schedule(hide_window)
             elif boat_state == "VALID" and boat_angle is not None and boat_angle != 0:
                 img = _render_nb_stronghold(
                     [], [], None, None, None, False,
@@ -430,15 +431,15 @@ def generate_default_pinned_image():
                 if img is not None:
                     _save_and_apply(img)
                 else:
-                    root.after(0, hide_window)
+                    _schedule(hide_window)
             else:
-                root.after(0, hide_window)
+                _schedule(hide_window)
         else:
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
         return
 
     if result_type not in ("TRIANGULATION", "BLIND") or not preds:
-        root.after(0, clear_overlay_image)
+        _schedule(clear_overlay_image)
         return
 
     img = _render_nb_stronghold(
@@ -449,7 +450,7 @@ def generate_default_pinned_image():
         user_font_path=user_font_path,
     )
     if img is None:
-        root.after(0, clear_overlay_image)
+        _schedule(clear_overlay_image)
         return
 
     _save_and_apply(img)
@@ -469,7 +470,7 @@ def _save_and_apply(img):
                 log("Failed to move tmp overlay file:", e)
     except Exception as e:
         log("Failed to save default overlay image:", e)
-    root.after(0, lambda im=img: apply_overlay_from_pil(im))
+    _schedule(lambda im=img: apply_overlay_from_pil(im))
 
 def clear_overlay_image():
     try:
@@ -487,7 +488,14 @@ def clear_overlay_image():
                 log("clear_overlay_image: Failed to write empty overlay:", e)
     except Exception as e:
         log("clear_overlay_image: Failed:", e)
-    root.after(0, hide_window)
+    if not HEADLESS:
+        root.after(0, hide_window)
+
+def _schedule(fn):
+    if HEADLESS:
+        fn()
+    else:
+        root.after(0, fn)
 
 def _make_draw_surface(w, h):
     img = Image.new("RGBA", (w, h), NB_ROW_BG)
@@ -1136,7 +1144,7 @@ def generate_custom_pinned_image():
         blind_resp      = dict(status["blind_resp"])
 
     if not stronghold_resp:
-        root.after(0, clear_overlay_image)
+        _schedule(clear_overlay_image)
         return
 
     boat_state  = boat_resp.get("boatState")
@@ -1295,10 +1303,8 @@ def generate_custom_pinned_image():
             with status_lock:
                 status["blindCurrentlyShowing"] = True
 
-            root.after(0, lambda im=img: apply_overlay_from_pil(im))
+            _schedule(lambda im=img: apply_overlay_from_pil(im))
             return
-
-
 
     if result_type == "TRIANGULATION":
         with status_lock:
@@ -1344,7 +1350,7 @@ def generate_custom_pinned_image():
             img.save(IMAGE_PATH)
         except Exception as e:
             log("Failed to save overlay image (error message):", e)
-        root.after(0, lambda im=img: apply_overlay_from_pil(im))
+        _schedule(lambda im=img: apply_overlay_from_pil(im))
         return
 
     with status_lock:
@@ -1354,7 +1360,7 @@ def generate_custom_pinned_image():
 
     if show_boat_icon and result_type == "NONE":
         if boat_state == "VALID" and boat_angle == 0:
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
             return
 
         if boat_state == last_shown and now < show_until:
@@ -1380,9 +1386,9 @@ def generate_custom_pinned_image():
                             log("Failed to save boat icon to IMAGE_PATH:", e2)
                 except Exception as e:
                     log("Failed to save boat icon:", e)
-                root.after(0, lambda im=icon: apply_overlay_from_pil(im, 64, 64))
+                _schedule(lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
-            root.after(0, clear_overlay_image)
+            _schedule(clear_overlay_image)
         return
 
     try:
@@ -1541,7 +1547,7 @@ def generate_custom_pinned_image():
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
     if not lines:
-        root.after(0, clear_overlay_image)
+        _schedule(clear_overlay_image)
         return
 
     font_name = custom.get("font_name", "")
@@ -1897,7 +1903,7 @@ def generate_custom_pinned_image():
     except Exception as e:
         log("Failed to save overlay image:", e)
 
-    root.after(0, lambda im=img: apply_overlay_from_pil(im))
+    _schedule(lambda im=img: apply_overlay_from_pil(im))
 
 # --------------------- END Generate custom pinned image overlay ----------------------
 
@@ -1993,6 +1999,8 @@ def check_and_update(current_version):
 # ---------------------- Helpers ----------------------
 
 def show_window():
+    if HEADLESS:
+        return
     try:
         try:
             root.attributes("-disabled", False)
@@ -2004,6 +2012,8 @@ def show_window():
         root.deiconify()
 
 def hide_window():
+    if HEADLESS:
+        return
     try:
         root.attributes("-alpha", 0.0)
         try:
@@ -2025,6 +2035,8 @@ def hide_window():
         root.withdraw()
 
 def place_window(width, height):
+    if HEADLESS:
+        return
     try:
         pos = load_config()
         if pos:
@@ -2041,6 +2053,11 @@ def place_window(width, height):
             pass
 
 def apply_overlay_from_pil(pil_img, width=None, height=None):
+    if HEADLESS:
+        w = int(width) if width is not None else pil_img.width
+        h = int(height) if height is not None else pil_img.height
+        log(f"apply_overlay_from_pil: Headless mode, overlay written ({w}x{h}px)")
+        return
     try:
         tk_img = ImageTk.PhotoImage(pil_img)
         label.config(image=tk_img)
@@ -2133,28 +2150,33 @@ IMAGE_PATH = "/tmp/imgpin-overlay.png"
 GREEN_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_green.png")
 RED_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_red.png")
 
-root = tk.Tk()
-root.overrideredirect(True)
-root.wm_attributes("-topmost", True)
+if HEADLESS:
+    root = None
+    label = None
+    TRANSPARENT_TK = None
+else:
+    root = tk.Tk()
+    root.overrideredirect(True)
+    root.wm_attributes("-topmost", True)
 
-try:
-    root.attributes("-alpha", 0.0)
-except Exception:
-    root.withdraw()
-
-saved_pos = load_config()
-if saved_pos:
-    sx, sy = saved_pos
     try:
-        root.geometry(f"+{sx}+{sy}")
+        root.attributes("-alpha", 0.0)
     except Exception:
-        pass
+        root.withdraw()
 
-label = tk.Label(root, borderwidth=0, highlightthickness=0)
-label.pack()
+    saved_pos = load_config()
+    if saved_pos:
+        sx, sy = saved_pos
+        try:
+            root.geometry(f"+{sx}+{sy}")
+        except Exception:
+            pass
 
-TRANSPARENT_IMG = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-TRANSPARENT_TK = ImageTk.PhotoImage(TRANSPARENT_IMG)
+    label = tk.Label(root, borderwidth=0, highlightthickness=0)
+    label.pack()
+
+    TRANSPARENT_IMG = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    TRANSPARENT_TK = ImageTk.PhotoImage(TRANSPARENT_IMG)
 
 image_queue = queue.Queue(maxsize=1)
 
@@ -2349,7 +2371,7 @@ def blind_timer_monitor_thread():
                     status["blindCurrentlyShowing"] = False
                     status["blindShowUntil"] = -1
                 try:
-                    root.after(0, hide_window)
+                    _schedule(hide_window)
                 except:
                     pass
                 time.sleep(1)
@@ -2396,15 +2418,20 @@ def on_release(event):
     save_config()
 
 
-root.bind("<ButtonPress-1>", start_move)
-root.bind("<B1-Motion>", on_motion)
-root.bind("<ButtonRelease-1>", on_release)
-
-root.after(100, update_image)
-
 threading.Thread(target=api_polling_thread, daemon=True).start()
-
 threading.Thread(target=image_update_thread, daemon=True).start()
 threading.Thread(target=blind_timer_monitor_thread, daemon=True).start()
 
-root.mainloop()
+if HEADLESS:
+    print("Running in headless mode. Writing overlay to", IMAGE_PATH)
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+else:
+    root.bind("<ButtonPress-1>", start_move)
+    root.bind("<B1-Motion>", on_motion)
+    root.bind("<ButtonRelease-1>", on_release)
+    root.after(100, update_image)
+    root.mainloop()
