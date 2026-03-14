@@ -265,7 +265,7 @@ def generate_default_pinned_image():
         show_until      = status.get("showUntil", 0)
 
     if not stronghold_resp:
-        root.after(0, hide_window)
+        root.after(0, clear_overlay_image)
         return
 
     result_type   = stronghold_resp.get("resultType")
@@ -333,7 +333,7 @@ def generate_default_pinned_image():
             with status_lock:
                 status["blindShowUntil"] = 0
                 status["blindCurrentlyShowing"] = False
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
             return
 
         with status_lock:
@@ -341,7 +341,7 @@ def generate_default_pinned_image():
             blind_currently_showing = status.get("blindCurrentlyShowing", False)
 
         if current_blind_show_until == -1:
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
             return
 
         if not blind_currently_showing:
@@ -365,7 +365,7 @@ def generate_default_pinned_image():
                 user_font_path=user_font_path,
             )
             if img is None:
-                root.after(0, hide_window)
+                root.after(0, clear_overlay_image)
                 return
             _save_and_apply(img)
             return
@@ -373,7 +373,7 @@ def generate_default_pinned_image():
             with status_lock:
                 status["blindCurrentlyShowing"] = False
                 status["blindShowUntil"] = -1
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
             return
 
     if result_type != "BLIND" or not blind_enabled or not (blind_result and blind_result.get("evaluation")):
@@ -398,7 +398,7 @@ def generate_default_pinned_image():
 
     if result_type in ("NONE",) and boat_state in ("VALID", "ERROR"):
         if not show_boat_icon_setting:
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
             return
 
         with status_lock:
@@ -434,11 +434,11 @@ def generate_default_pinned_image():
             else:
                 root.after(0, hide_window)
         else:
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
         return
 
     if result_type not in ("TRIANGULATION", "BLIND") or not preds:
-        root.after(0, hide_window)
+        root.after(0, clear_overlay_image)
         return
 
     img = _render_nb_stronghold(
@@ -449,7 +449,7 @@ def generate_default_pinned_image():
         user_font_path=user_font_path,
     )
     if img is None:
-        root.after(0, hide_window)
+        root.after(0, clear_overlay_image)
         return
 
     _save_and_apply(img)
@@ -470,6 +470,24 @@ def _save_and_apply(img):
     except Exception as e:
         log("Failed to save default overlay image:", e)
     root.after(0, lambda im=img: apply_overlay_from_pil(im))
+
+def clear_overlay_image():
+    try:
+        empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+        tmp = IMAGE_PATH + ".tmp.png"
+        empty.save(tmp, format="PNG")
+        try:
+            os.replace(tmp, IMAGE_PATH)
+        except Exception:
+            try:
+                if os.path.exists(IMAGE_PATH):
+                    os.remove(IMAGE_PATH)
+                os.rename(tmp, IMAGE_PATH)
+            except Exception as e:
+                log("clear_overlay_image: Failed to write empty overlay:", e)
+    except Exception as e:
+        log("clear_overlay_image: Failed:", e)
+    root.after(0, hide_window)
 
 def _make_draw_surface(w, h):
     img = Image.new("RGBA", (w, h), NB_ROW_BG)
@@ -1118,6 +1136,7 @@ def generate_custom_pinned_image():
         blind_resp      = dict(status["blind_resp"])
 
     if not stronghold_resp:
+        root.after(0, clear_overlay_image)
         return
 
     boat_state  = boat_resp.get("boatState")
@@ -1335,7 +1354,7 @@ def generate_custom_pinned_image():
 
     if show_boat_icon and result_type == "NONE":
         if boat_state == "VALID" and boat_angle == 0:
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
             return
 
         if boat_state == last_shown and now < show_until:
@@ -1347,9 +1366,23 @@ def generate_custom_pinned_image():
             except Exception as e:
                 log("Failed to load/process icon:", e)
             else:
+                tmp = IMAGE_PATH + ".tmp.png"
+                try:
+                    icon.save(tmp, format="PNG")
+                    try:
+                        os.replace(tmp, IMAGE_PATH)
+                    except Exception:
+                        try:
+                            if os.path.exists(IMAGE_PATH):
+                                os.remove(IMAGE_PATH)
+                            os.rename(tmp, IMAGE_PATH)
+                        except Exception as e2:
+                            log("Failed to save boat icon to IMAGE_PATH:", e2)
+                except Exception as e:
+                    log("Failed to save boat icon:", e)
                 root.after(0, lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
-            root.after(0, hide_window)
+            root.after(0, clear_overlay_image)
         return
 
     try:
@@ -1508,7 +1541,7 @@ def generate_custom_pinned_image():
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
     if not lines:
-        root.after(0, hide_window)
+        root.after(0, clear_overlay_image)
         return
 
     font_name = custom.get("font_name", "")
