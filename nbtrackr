@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+if [[ "$1" == "--settings" ]]; then
+    "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/Customizer-imgpin.py" "${@:2}" &
+    disown
+    exit 0
+else
+    exec "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/NBTrackr-imgpin.py" "$@"
+fi

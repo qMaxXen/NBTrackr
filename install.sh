@@ -2,12 +2,13 @@
 set -e
 
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 CYAN='\033[0;36m'
 
-echo "========================================"
-echo "    NBTrackr dependencies installer"
-echo "========================================"
+echo "==================================="
+echo "        NBTrackr installer"
+echo "==================================="
 echo
 
 if [ ! -d "venv" ]; then
@@ -27,7 +28,7 @@ except ImportError:
     print("Installation of NBTrackr dependencies may fail.")
     print("You can install pip manually by running:")
     print("  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py")
-    print("  $FULL_PATH get-pip.py")
+    print("  python get-pip.py")
 EOF
 
 "$FULL_PATH" - <<'EOF'
@@ -53,18 +54,40 @@ echo
 echo -e "${GREEN}Installation complete!${NC}"
 echo
 
-if [ -f "NBTrackr-imgpin.py" ] && [ -f "Customizer-imgpin.py" ]; then
-    echo -e "${CYAN}NBTrackr-imgpin.py${NC} is the main script for running NBTrackr."
-    echo -e "${CYAN}Customizer-imgpin.py${NC} is the script for customizing NBTrackr."
-    echo
-    echo "Run the scripts from inside the current directory:"
-    echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: \"./venv/bin/python\" \"NBTrackr-imgpin.py\""
-    echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: \"./venv/bin/python\" \"Customizer-imgpin.py\""
-    echo
-    echo "Run from anywhere (full path):"
-    echo -e "  - For ${CYAN}NBTrackr-imgpin.py${NC}: \"${FULL_PATH}\" \"$(pwd)/NBTrackr-imgpin.py\""
-    echo -e "  - For ${CYAN}Customizer-imgpin.py${NC}: \"${FULL_PATH}\" \"$(pwd)/Customizer-imgpin.py\""
+INSTALL_DIR="$HOME/.local/bin"
+LAUNCHER_TARGET="$(pwd)/nbtrackr"
+LAUNCHER_LINK="$INSTALL_DIR/nbtrackr"
 
+chmod +x "$LAUNCHER_TARGET"
+mkdir -p "$INSTALL_DIR"
+
+if [ -L "$LAUNCHER_LINK" ] || [ -e "$LAUNCHER_LINK" ]; then
+    echo "Updating existing nbtrackr entry in $INSTALL_DIR..."
+    ln -sf "$LAUNCHER_TARGET" "$LAUNCHER_LINK"
 else
-    echo "Warning: Could not detect which NBTrackr scripts are present in this folder."
+    ln -sf "$LAUNCHER_TARGET" "$LAUNCHER_LINK"
+    echo -e "${GREEN}NBTrackr added to $INSTALL_DIR${NC}"
 fi
+case ":$PATH:" in
+    *":$INSTALL_DIR:"*)
+        ;;
+    *)
+        echo
+        echo -e "${YELLOW}$INSTALL_DIR is not in your PATH.${NC}"
+        echo "Add this line to your shell config (~/.bashrc, ~/.zshrc, etc.):"
+        echo
+        echo -e "  ${CYAN}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
+        echo
+        echo "Then restart your terminal."
+        ;;
+esac
+echo
+
+echo "To run NBTrackr:"
+echo -e "  ${CYAN}nbtrackr${NC}"
+echo
+echo "To configure NBTrackr:"
+echo -e "  ${CYAN}nbtrackr --settings${NC}"
+echo
+echo "To remove NBTrackr from your terminal, run:"
+echo -e "  ${CYAN}./uninstall.sh${NC}"
