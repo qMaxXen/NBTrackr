@@ -1647,7 +1647,7 @@ def main():
     custom = load_customizations()
 
     root = tk.Tk()
-    root.title("NBTrackr Pinned Image Overlay Customizer")
+    root.title("NBTrackr Settings")
     root.resizable(False, False)
 
     use_var = tk.BooleanVar(value=custom.get("use_custom_pinned_image", False))
