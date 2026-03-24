@@ -203,6 +203,7 @@ def generate_default_pinned_image():
         boat_resp       = dict(status["boat_resp"])
         stronghold_resp = dict(status["stronghold_resp"])
         blind_resp      = dict(status["blind_resp"])
+        info_resp       = dict(status["info_resp"])
         now             = time.time()
         show_until      = status.get("showUntil", 0)
 
@@ -270,6 +271,8 @@ def generate_default_pinned_image():
     _last_default_stronghold = cache_key
     _last_default_boat = boat_resp
 
+    info_messages = info_resp.get("informationMessages", [])
+
     if result_type == "BLIND" and blind_enabled and blind_result and blind_result.get("evaluation"):
         if not show_blind_info_setting:
             with status_lock:
@@ -305,6 +308,7 @@ def generate_default_pinned_image():
                 blind_result=blind_result,
                 boat_state=boat_state,
                 user_font_path=user_font_path,
+                info_messages=info_messages,
             )
             if img is None:
                 _schedule(clear_overlay_image)
@@ -332,6 +336,7 @@ def generate_default_pinned_image():
             failed=True,
             boat_state=boat_state,
             user_font_path=user_font_path,
+            info_messages=info_messages,
         )
         if img is None:
             img = _render_nb_failed_standalone(font_size)
@@ -389,6 +394,7 @@ def generate_default_pinned_image():
         show_adj_count,
         boat_state=boat_state,
         user_font_path=user_font_path,
+        info_messages=info_messages,
     )
     if img is None:
         _schedule(clear_overlay_image)
@@ -447,7 +453,10 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                            in_nether, font_size, neg_coords_enabled,
                            neg_coords_rgb, ow_coords_format, show_adj_count,
                            blind_result=None, failed=False,
-                           boat_state=None, force_empty=False, user_font_path=""):
+                           boat_state=None, force_empty=False, user_font_path="",
+                           info_messages=None):
+    if info_messages is None:
+        info_messages = []
     show_angle = (h_ang is not None and player_x is not None and player_z is not None)
 
     def _load_font_for_size(size):
@@ -719,29 +728,28 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
     top_headers_h = hdr_h
     top_headers_gap = HDR_SEP
 
-    show_portal_warning = False
-    if not hide_row_dividers and rows and eye_throws:
-        first_throw = eye_throws[0]
-        t_x = (first_throw.get("xInOverworld") or 0.0)
-        t_z = (first_throw.get("zInOverworld") or 0.0)
-        approx_portal_nether_x = t_x / 8.0
-        approx_portal_nether_z = t_z / 8.0
-        best = preds[0]
-        best_nether_x = best.get("chunkX", 0) * 16 / 8.0 + 0.5
-        best_nether_z = best.get("chunkZ", 0) * 16 / 8.0 + 0.5
-        max_axis_distance = max(
-            abs(approx_portal_nether_x - best_nether_x),
-            abs(approx_portal_nether_z - best_nether_z),
-        )
-        show_portal_warning = max_axis_distance < 24
+    show_portal_warning = any(m.get("type") == "PORTAL_LINKING" for m in info_messages)
 
     _row_slot = body_h + (ROW_SEP if not hide_row_dividers else 0)
     main_h = new_header_h + HDR_SEP + HDR_SEP + top_headers_h + HDR_SEP + num_display_rows * _row_slot
-    
-    if show_portal_warning:
-        warn_text_h = th(portal_warn_font)
-        compact_warn_h = (warn_text_h * 2) + 1 + 5
-        main_h += compact_warn_h
+
+    _display_info_messages = [
+        m for m in info_messages
+        if m.get("type") in ("PORTAL_LINKING", "NEXT_THROW_DIRECTION", "MISMEASURE")
+    ]
+    warn_text_h = th(portal_warn_font)
+    _TWO_LINE_TYPES = ("NEXT_THROW_DIRECTION", "MISMEASURE", "PORTAL_LINKING")
+    def _info_msg_h(msg):
+        if msg.get("type") in _TWO_LINE_TYPES:
+            return warn_text_h * 2 + 4 + 6
+        return warn_text_h + 6
+    info_row_h = warn_text_h + 6
+    total_info_h = sum(_info_msg_h(m) for m in _display_info_messages)
+    if _display_info_messages:
+        total_info_h += ROW_SEP
+    if len(_display_info_messages) > 1:
+        total_info_h += ROW_SEP * (len(_display_info_messages) - 1)
+    main_h += total_info_h
 
     num_throw_rows = max(len(throw_rows_data), 3)
 
@@ -885,32 +893,94 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                 draw.text((bx + tw(base_str), text_y), dir_part, font=body_font, fill=dir_col)
             x += cw
 
-    if show_portal_warning:
-        warn_area_start_y = row_area_y + num_display_rows * _row_slot
-        warn_y = warn_area_start_y + 1 
-        
-        line1 = "You might not be able to nether travel into the stronghold due to"
-        line2 = "portal linking."
-        
-        text_h = th(portal_warn_font)
-        line_spacing = 1 
-        total_text_h = (text_h * 2) + line_spacing
+    if _display_info_messages:
+        info_area_start_y = row_area_y + num_display_rows * _row_slot
+        def _split_two_lines(msg_type, text):
+            if msg_type == "NEXT_THROW_DIRECTION":
+                marker = "after next"
+                idx = text.find(marker)
+                if idx != -1:
+                    split_pos = idx + len(marker)
+                    line1 = text[:split_pos].rstrip()
+                    line2 = text[split_pos:].lstrip()
+                    if line2:
+                        return line1, line2
+                return text, None
+            if msg_type == "MISMEASURE":
+                marker = "mismeasured or"
+                idx = text.find(marker)
+                if idx != -1:
+                    split_pos = idx + len(marker)
+                    line1 = text[:split_pos].rstrip()
+                    line2 = text[split_pos:].lstrip()
+                    if line2:
+                        return line1, line2
+                return text, None
+            if msg_type == "PORTAL_LINKING":
+                marker = "due to"
+                idx = text.find(marker)
+                if idx != -1:
+                    split_pos = idx + len(marker)
+                    line1 = text[:split_pos].rstrip()
+                    line2 = text[split_pos:].lstrip()
+                    if line2:
+                        return line1, line2
+                return text, None
+            return text, None
+        current_info_y = info_area_start_y
+        draw.rectangle(
+            [0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1],
+            fill=NB_ROW_SEP
+        )
+        current_info_y += ROW_SEP
+        for msg_idx, msg in enumerate(_display_info_messages):
+            severity = msg.get("severity", "WARNING")
+            msg_type = msg.get("type", "")
+            text     = msg.get("message", "")
+            text_h   = th(portal_warn_font)
+            icon_size = int(text_h * 1.1)
+            this_msg_h = _info_msg_h(msg)
+            row_y = current_info_y
 
-        icon_size = int(text_h * 1.1) 
-        
-        try:
-            icon_path = os.path.join(os.path.dirname(__file__), "assets", "warning_icon.png")
-            with Image.open(icon_path) as icon_img:
-                icon_img = icon_img.convert("RGBA").resize((icon_size, icon_size), Image.Resampling.LANCZOS)
+            if severity == "INFO":
+                icon_file = "info_icon.png"
+            else:
+                icon_file = "warning_icon.png"
 
-                icon_y = warn_y + (total_text_h - icon_size) // 2
-                img.alpha_composite(icon_img, (CELL_PAD_MAIN, icon_y))
+            icon_path = os.path.join(_get_assets_dir(), icon_file)
+            try:
+                with Image.open(icon_path) as icon_img:
+                    icon_img = icon_img.convert("RGBA").resize((icon_size, icon_size), Image.Resampling.LANCZOS)
+                    icon_y = row_y + (this_msg_h - icon_size) // 2
+                    img.alpha_composite(icon_img, (CELL_PAD_MAIN, icon_y))
                 text_start_x = CELL_PAD_MAIN + icon_size + 8
-        except Exception:
-            text_start_x = CELL_PAD_MAIN
+            except Exception:
+                text_start_x = CELL_PAD_MAIN
 
-        draw.text((text_start_x, warn_y), line1, font=portal_warn_font, fill=portal_warn_color)
-        draw.text((text_start_x, warn_y + text_h + line_spacing), line2, font=portal_warn_font, fill=portal_warn_color)
+            if msg_type in _TWO_LINE_TYPES:
+                line1, line2 = _split_two_lines(msg_type, text)
+                if line2:
+                    line_gap = 4
+                    total_text_h = text_h * 2 + line_gap
+                    text_y1 = row_y + (this_msg_h - total_text_h) // 2
+                    text_y2 = text_y1 + text_h + line_gap
+                    draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=portal_warn_color)
+                    draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=portal_warn_color)
+                else:
+                    text_y = row_y + (this_msg_h - text_h) // 2
+                    draw.text((text_start_x, text_y), line1, font=portal_warn_font, fill=portal_warn_color)
+            else:
+                text_y = row_y + (this_msg_h - text_h) // 2
+                draw.text((text_start_x, text_y), text, font=portal_warn_font, fill=portal_warn_color)
+
+            current_info_y += this_msg_h
+
+            if msg_idx < len(_display_info_messages) - 1:
+                draw.rectangle(
+                    [0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1],
+                    fill=NB_ROW_SEP
+                )
+                current_info_y += ROW_SEP
 
     if blind_result is not None:
         eval_color  = blind_evaluation_color(evaluation)
@@ -1080,6 +1150,7 @@ def generate_custom_pinned_image():
         boat_resp       = dict(status["boat_resp"])
         stronghold_resp = dict(status["stronghold_resp"])
         blind_resp      = dict(status["blind_resp"])
+        info_resp       = dict(status["info_resp"])
 
     if not stronghold_resp:
         _schedule(clear_overlay_image)
@@ -1092,6 +1163,7 @@ def generate_custom_pinned_image():
 
     blind_enabled = blind_resp.get("isBlindModeEnabled", False)
     blind_result = blind_resp.get("blindResult", {})
+    info_messages = info_resp.get("informationMessages", [])
 
     now = time.time()
 
@@ -2155,6 +2227,7 @@ status = {
     "boat_resp": {},
     "stronghold_resp": {},
     "blind_resp": {},
+    "info_resp": {},
 }
 
 USE_CUSTOM_PINNED_IMAGE = load_customizations()
@@ -2177,6 +2250,7 @@ def api_polling_thread():
             boat_resp = requests.get("http://localhost:52533/api/v1/boat", timeout=0.5).json()
             stronghold_resp = requests.get("http://localhost:52533/api/v1/stronghold", timeout=0.5).json()
             blind_resp = requests.get("http://localhost:52533/api/v1/blind", timeout=0.5).json()
+            info_resp = requests.get("http://localhost:52533/api/v1/information-messages", timeout=0.5).json()
 
             if not _nb_was_connected:
                 print("Connected to Ninjabrain Bot.")
@@ -2210,6 +2284,7 @@ def api_polling_thread():
                 status["boat_resp"]       = boat_resp
                 status["stronghold_resp"] = stronghold_resp
                 status["blind_resp"]      = blind_resp
+                status["info_resp"]       = info_resp
 
                 blind_changed = False
                 has_valid_result = blind_result and blind_result.get("evaluation") is not None
@@ -2303,6 +2378,7 @@ def api_polling_thread():
                 status["blindResult"] = None
                 status["blindShowUntil"] = 0
                 status["blindCurrentlyShowing"] = False
+                status["info_resp"] = {}
 
         time.sleep(MAX_API_POLLING_RATE)
 
