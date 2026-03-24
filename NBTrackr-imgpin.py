@@ -574,8 +574,12 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
         hdr_labels["angle"] = "Angle"
 
     col_widths = {}
+    if ow_coords_format == "chunk":
+        _loc_sample = f"({-999}, {-999})"
+    else:
+        _loc_sample = f"({12345}, {12345})"
     _rep_samples = {
-        "loc":    f"({12345}, {12345})",
+        "loc":    _loc_sample,
         "cert":   "100.0%",
         "dist":   "10000",
         "nether": f"({12345}, {12345})",
