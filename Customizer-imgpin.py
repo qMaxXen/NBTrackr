@@ -19,7 +19,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "shown_measurements": 5,
     "overworld_coords_format": "four_four",
     "angle_display_mode": "angle_and_change",
-    "show_angle_adjustment_count": False,
+    "show_angle_adjustment_count": True,
     "show_angle_error": False,
     "show_overlay_header": True,
     "show_coords_based_on_dimension": False,
@@ -1821,17 +1821,6 @@ def main():
     ang_mode_combo.pack(side="left", padx=5)
     ang_mode_combo.bind("<<ComboboxSelected>>", lambda ev: ev.widget.selection_clear())
 
-    def on_adj_count_toggled(*_):
-        if adj_count_var.get():
-            messagebox.showwarning(
-                "NBTrackr - Angle Adjustment Count",
-                "The angle adjustment count is an estimate because\n"
-                "Ninjabrain Bot API doesn't provide the exact number of adjustments.\n\n"
-                "It should work correctly most of the time,\n"
-                "but be aware that it's not 100% accurate.\n\n"
-                "This will be fixed in Ninjabrain Bot v1.5.2+."
-            )
-
     f4 = tk.Frame(e); f4.pack(fill="x", pady=5)
     dim_var = tk.BooleanVar(value=custom.get("show_coords_based_on_dimension", False))
     tk.Label(f4, text="Show Overworld/Nether coords based on dimension", anchor="w").pack(side="left")
@@ -1868,8 +1857,6 @@ def main():
     tk.Label(f3b, text="Show angle adjustment count", anchor="w").pack(side="left")
     adj_count_checkbox = tk.Checkbutton(f3b, variable=adj_count_var)
     adj_count_checkbox.pack(side="left", padx=5)
-
-    adj_count_var.trace_add("write", on_adj_count_toggled)
 
     f3d = tk.Frame(e); f3d.pack(fill="x", pady=5)
     angle_error_var = tk.BooleanVar(value=custom.get("show_angle_error", False))
