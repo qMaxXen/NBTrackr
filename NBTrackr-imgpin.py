@@ -34,10 +34,6 @@ _last_stronghold = None
 _last_blind = None
 _cached_customizations = None
 
-_nb_settings_cache = None
-_nb_settings_cache_time = 0
-NB_SETTINGS_CACHE_TTL = 60.0
-
 _last_custom_mtime = 0
 
 def get_customizations():
@@ -64,61 +60,6 @@ def _load_advanced_settings():
         return False, 0.2, 0.05
 
 DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
-
-def get_ninjabrainbot_settings():
-    global _nb_settings_cache, _nb_settings_cache_time
-    now = time.time()
-    if _nb_settings_cache is not None and (now - _nb_settings_cache_time) < NB_SETTINGS_CACHE_TTL:
-        return _nb_settings_cache
-
-    prefs_path = os.path.expanduser("~/.java/.userPrefs/ninjabrainbot/prefs.xml")
-    result = {}
-    try:
-        import xml.etree.ElementTree as ET
-        tree = ET.parse(prefs_path)
-        root_el = tree.getroot()
-        for entry in root_el.iter("entry"):
-            key = entry.get("key")
-            val = entry.get("value")
-            if key is None or val is None:
-                continue
-            try:
-                result[key] = int(val)
-                continue
-            except ValueError:
-                pass
-            try:
-                result[key] = float(val)
-                continue
-            except ValueError:
-                pass
-            result[key] = val
-    except Exception as e:
-        log("get_ninjabrain_settings: failed to read NB prefs:", e)
-
-    _nb_settings_cache = result
-    _nb_settings_cache_time = now
-    return result
-
-
-def calculate_correction_increments(correction: float, settings: dict) -> int:
-    BETA = -31.0
-    adj_type = int(settings.get("angle_adjustment_type", 0))
-
-    if adj_type == 1:
-        to_rad = math.pi / 180.0
-        height = float(settings.get("resolution_height", 16384.0))
-        change = math.atan(2 * math.tan(15 * to_rad) / height) / math.cos(BETA * to_rad) / to_rad
-    elif adj_type == 2:
-        change = float(settings.get("custom_adjustment", 0.01))
-    else:
-        change = 0.01
-
-    if change == 0:
-        return 0
-
-    raw = correction / change
-    return int(math.floor(raw + 0.5))
 
 def gradient_color(angle: float):
     if angle <= 90:
@@ -607,12 +548,9 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
 
     adj_count_by_throw = {}
     if show_adj_count and eye_throws:
-        nb_settings = get_ninjabrainbot_settings()
         for throw_idx, throw in enumerate(eye_throws):
-            angle_with    = throw.get("angle", 0.0) or 0.0
             angle_without = throw.get("angleWithoutCorrection", 0.0) or 0.0
-            correction    = angle_with - angle_without
-            increments    = calculate_correction_increments(correction, nb_settings)
+            increments    = throw.get("correctionIncrements", 0) or 0
             if increments != 0:
                 sign = "+" if increments >= 0 else ""
                 adj_count_by_throw[throw_idx] = (f"{angle_without:.2f}", f"{sign}{increments}", increments)
@@ -1524,11 +1462,8 @@ def generate_custom_pinned_image():
     if eye_throws:
         for throw_idx, throw in enumerate(eye_throws):
             if show_adj_count:
-                angle_with    = throw.get("angle", 0.0)
                 angle_without = throw.get("angleWithoutCorrection", 0.0)
-                correction    = angle_with - angle_without
-                nb_settings   = get_ninjabrainbot_settings()
-                increments    = calculate_correction_increments(correction, nb_settings)
+                increments    = throw.get("correctionIncrements", 0) or 0
                 log("Throw", throw_idx, "adj count:", increments)
 
                 if increments != 0:
@@ -2092,7 +2027,7 @@ def check_ninjabrainbot_version():
     except SystemExit:
         raise
     except Exception as e:
-        print(f"Could not connect to Ninjabrain Bot to verify version: {e}")
+        log(f"Could not connect to Ninjabrain Bot to verify version: {e}")
         print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
         sys.exit(1)
 
