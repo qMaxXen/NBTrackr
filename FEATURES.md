@@ -9,7 +9,7 @@
 
 ## Default Pinned Image Overlay Features
 - Shows a full replica of Ninjabrain Bot's window.
-- Shows the "You might not be able to nether travel into the stronghold due to portal linking." warning message. 
+- Shows the information messages (e.g. "Detected unusually large errors...").
 - Shows the blind information.
 - Shows the "Could not determine" error message.
 - Shows boat states.
@@ -28,7 +28,7 @@
 <img src="https://github.com/user-attachments/assets/88ede89b-ae2a-4b07-ab6a-b2f889377195" width="500"/>
 
 ## Configuring Pinned Image Overlay
-- Run the `Customizer-imgpin.py` script to customize the pinned image overlay.
+- Type `nbtrackr --settings` in the terminal to customize the pinned image overlay.
 - Every customization is saved to `~/.config/NBTrackr/customizations.json`.
 - Note that when `Use custom pinned image overlay` is disabled under the `General` tab, many settings will be grayed out, as they only apply to the custom pinned image overlay.
 

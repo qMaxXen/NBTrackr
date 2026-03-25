@@ -18,24 +18,29 @@ A Python script that displays Ninjabrain Bot's info using a pinned image overlay
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
 
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/latest) section of this repository and download `NBTrackr-imgpin-v2.4.0.tar.xz`.
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/latest) section of this repository and download `NBTrackr-imgpin-v2.5.0.tar.xz`.
 
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 
    ```bash
-   tar -xf NBTrackr-imgpin-v2.4.0.tar.xz
+   tar -xf NBTrackr-imgpin-v2.5.0.tar.xz
    ```
 4. Install the required Python packages to run NBTrackr with the following command:
 
    ```bash
-   cd NBTrackr-imgpin-v2.4.0
+   cd NBTrackr-imgpin-v2.5.0
    chmod +x install.sh
    ./install.sh
    ```
-5. Run the main script from inside the extracted folder with the following command:
+5. To run NBTrackr, type:
    ```bash
-   ./venv/bin/python NBTrackr-imgpin.py
+   nbtrackr
    ```
+   To configure NBTrackr, type:
+   ```bash
+   nbtrackr --settings
+   ```
+
 > [!NOTE]
 > On some Linux setups (especially Wayland), the **pinned image overlay** may steal focus on launch. This behavior depends
 > on your window manager or desktop environment. On X11, it should not steal focus. To unfocus it, simply switch to a different
