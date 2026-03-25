@@ -1,5 +1,8 @@
 # Features
 
+## Arguments
+- `--headless` - Makes the window not appear. The information is written to `/tmp/imgpin-overlay.png`.
+
 ## General Pinned Image Overlay Features
 - The pinned image overlay will not appear if Ninjabrain Bot has no calculations.
 - The pinned image overlay appears on top of your Minecraft window.
@@ -9,7 +12,10 @@
 
 ## Default Pinned Image Overlay Features
 - Shows a full replica of Ninjabrain Bot's window.
-- Shows the information messages (e.g. "Detected unusually large errors...").
+- Shows the information messages:
+  - "Detected unusually large errors, you probably mismeasured or your standard deviation is too low."
+  - "You might not be able to nether travel into the stronghold due to portal linking."
+  - "Go left X blocks, or right X blocks, for ~95% certainty after next measurement."
 - Shows the blind information.
 - Shows the "Could not determine" error message.
 - Shows boat states.
