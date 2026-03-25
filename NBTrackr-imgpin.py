@@ -262,7 +262,7 @@ def generate_default_pinned_image():
     if (cache_key == _last_default_stronghold and
             boat_resp == _last_default_boat):
         try:
-            visible = bool(root.winfo_ismapped() and root.attributes("-alpha") and root.attributes("-alpha") > 0.0)
+            visible = root.winfo_x() > -9000
         except Exception:
             visible = True
         if visible:
@@ -1406,11 +1406,7 @@ def generate_custom_pinned_image():
         return
 
     try:
-        visible = False
-        try:
-            visible = bool(root.winfo_ismapped() and root.attributes("-alpha") and root.attributes("-alpha") > 0.0)
-        except Exception:
-            visible = bool(root.winfo_ismapped())
+        visible = root.winfo_x() > -9000
     except Exception:
         visible = True
 
@@ -2013,37 +2009,18 @@ def show_window():
     if HEADLESS:
         return
     try:
-        try:
-            root.attributes("-disabled", False)
-        except Exception:
-            pass
-        root.attributes("-alpha", 1.0)
         root.update_idletasks()
     except Exception:
-        root.deiconify()
+        pass
 
 def hide_window():
     if HEADLESS:
         return
     try:
-        root.attributes("-alpha", 0.0)
-        try:
-            label.config(image=TRANSPARENT_TK)
-            label.image = TRANSPARENT_TK
-        except Exception:
-            pass
-        try:
-            root.geometry(f"1x1+0+0")
-        except Exception:
-            root.geometry("1x1+0+0")
+        root.geometry(f"+{-10000}+{-10000}")
         root.update_idletasks()
     except Exception:
-        try:
-            label.config(image=TRANSPARENT_TK)
-            label.image = TRANSPARENT_TK
-        except Exception:
-            pass
-        root.withdraw()
+        pass
 
 def place_window(width, height):
     if HEADLESS:
@@ -2193,11 +2170,6 @@ else:
     root = tk.Tk()
     root.overrideredirect(True)
     root.wm_attributes("-topmost", True)
-
-    try:
-        root.attributes("-alpha", 0.0)
-    except Exception:
-        root.withdraw()
 
     saved_pos = load_config()
     if saved_pos:
