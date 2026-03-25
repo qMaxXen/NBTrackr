@@ -14,6 +14,7 @@ import atexit
 import tempfile
 import tarfile
 import sys
+import re
 
 # Program Version
 APP_VERSION = "v2.5.0"
@@ -117,6 +118,8 @@ def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
     except Exception:
         return fallback
 
+def _strip_html(text):
+    return re.sub(r'<[^>]+>', '', text)
 
 # --------------------- Cache End --------------------------
 
@@ -940,7 +943,7 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
         for msg_idx, msg in enumerate(_display_info_messages):
             severity = msg.get("severity", "WARNING")
             msg_type = msg.get("type", "")
-            text     = msg.get("message", "")
+            text     = _strip_html(msg.get("message", ""))
             text_h   = th(portal_warn_font)
             icon_size = int(text_h * 1.1)
             this_msg_h = _info_msg_h(msg)
