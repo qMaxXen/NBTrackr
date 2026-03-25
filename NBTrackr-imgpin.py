@@ -742,10 +742,10 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
 
     _display_info_messages = [
         m for m in info_messages
-        if m.get("type") in ("PORTAL_LINKING", "NEXT_THROW_DIRECTION", "MISMEASURE")
+        if m.get("type") in ("PORTAL_LINKING", "NEXT_THROW_DIRECTION", "MISMEASURE", "COMBINED_CERTAINTY")
     ]
     warn_text_h = th(portal_warn_font)
-    _TWO_LINE_TYPES = ("NEXT_THROW_DIRECTION", "MISMEASURE", "PORTAL_LINKING")
+    _TWO_LINE_TYPES = ("NEXT_THROW_DIRECTION", "MISMEASURE", "PORTAL_LINKING", "COMBINED_CERTAINTY")
     def _info_msg_h(msg):
         if msg.get("type") in _TWO_LINE_TYPES:
             return warn_text_h * 2 + 4 + 6
@@ -933,6 +933,16 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                     if line2:
                         return line1, line2
                 return text, None
+            if msg_type == "COMBINED_CERTAINTY":
+                marker = "stronghold (it"
+                idx = text.find(marker)
+                if idx != -1:
+                    split_pos = idx + len(marker)
+                    line1 = text[:split_pos].rstrip()
+                    line2 = text[split_pos:].lstrip()
+                    if line2:
+                        return line1, line2
+                return text, None
             return text, None
         current_info_y = info_area_start_y
         draw.rectangle(
@@ -971,8 +981,29 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                     total_text_h = text_h * 2 + line_gap
                     text_y1 = row_y + (this_msg_h - total_text_h) // 2
                     text_y2 = text_y1 + text_h + line_gap
-                    draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=portal_warn_color)
-                    draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=portal_warn_color)
+                    if msg_type == "COMBINED_CERTAINTY":
+                        pct_match = re.search(r'(\d+\.?\d*%)', line1)
+                        if pct_match:
+                            before = line1[:pct_match.start()]
+                            pct_str = pct_match.group(1)
+                            after = line1[pct_match.end():]
+                            try:
+                                pct_val = float(pct_str.rstrip('%'))
+                                pct_color = _nb_certainty_color(pct_val)
+                            except Exception:
+                                pct_color = portal_warn_color
+                            bx = text_start_x
+                            draw.text((bx, text_y1), before, font=portal_warn_font, fill=portal_warn_color)
+                            bx += tw(before, portal_warn_font)
+                            draw.text((bx, text_y1), pct_str, font=portal_warn_font, fill=pct_color)
+                            bx += tw(pct_str, portal_warn_font)
+                            draw.text((bx, text_y1), after, font=portal_warn_font, fill=portal_warn_color)
+                        else:
+                            draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=portal_warn_color)
+                        draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=portal_warn_color)
+                    else:
+                        draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=portal_warn_color)
+                        draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=portal_warn_color)
                 else:
                     text_y = row_y + (this_msg_h - text_h) // 2
                     draw.text((text_start_x, text_y), line1, font=portal_warn_font, fill=portal_warn_color)
