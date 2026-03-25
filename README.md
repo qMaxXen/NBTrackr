@@ -9,8 +9,8 @@
 A Python script that displays Ninjabrain Bot's info using a pinned image overlay. It comes with two types of overlays: the default overlay shows a replica of Ninjabrain Bot's window, and a custom overlay which is a more minimal overlay with more customization options. This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
 
 <div align="center">
-<img src="https://github.com/user-attachments/assets/277dd40a-4fae-4790-bb10-24ea6d3e6bef" width="400"/>
-<img src="https://github.com/user-attachments/assets/8ef4eb48-9716-403a-b59b-37424602fe1b" width="400"/>
+<img src="https://github.com/user-attachments/assets/fdebfe5e-de52-45e6-b30a-76bb04703e5a" width="400"/>
+<img src="https://github.com/user-attachments/assets/e06a5e6c-55f5-4062-9399-e114271edee9" width="400"/>
 </div>
 
 ## Installation
