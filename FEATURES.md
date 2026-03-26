@@ -1,7 +1,13 @@
 # Features
 
 ## Arguments
+- `--settings` - Opens a window to configure NBTrackr. For more information, see [Configuring Pinned Image Overlay](https://github.com/qMaxXen/NBTrackr/blob/main/FEATURES.md#configuring-pinned-image-overlay).
 - `--headless` - Makes the window not appear. The information is written to `/tmp/imgpin-overlay.png`.
+
+*Example usage:*
+```bash
+nbtrackr --headless
+```
 
 ## General Pinned Image Overlay Features
 - The pinned image overlay will not appear if Ninjabrain Bot has no calculations.
