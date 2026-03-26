@@ -16,6 +16,7 @@
   - "Detected unusually large errors, you probably mismeasured or your standard deviation is too low."
   - "You might not be able to nether travel into the stronghold due to portal linking."
   - "Go left X blocks, or right X blocks, for ~95% certainty after next measurement."
+  - "Nether coords X have X% chance to hit the stronghold (it is between the top 2 offsets)."
 - Shows the blind information.
 - Shows the "Could not determine" error message.
 - Shows boat states.
