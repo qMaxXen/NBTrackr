@@ -25,7 +25,7 @@ A Python script that displays Ninjabrain Bot's info using a pinned image overlay
    ```bash
    tar -xf NBTrackr-imgpin-v2.5.1.tar.xz
    ```
-4. Install the required Python packages to run NBTrackr with the following command:
+4. Install the required Python packages to run NBTrackr:
 
    ```bash
    cd NBTrackr-imgpin-v2.5.1
