@@ -18,17 +18,17 @@ A Python script that displays Ninjabrain Bot's info using a pinned image overlay
 1. Enable API in Ninjabrain Bot. 
 ![image](https://github.com/user-attachments/assets/fe684b8b-1601-4dc9-86be-97160a964954)
 
-2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/latest) section of this repository and download `NBTrackr-imgpin-v2.5.1.tar.xz`.
+2. Go to the [releases](https://github.com/qMaxXen/NBTrackr/releases/latest) section of this repository and download `NBTrackr-imgpin-v2.5.2.tar.xz`.
 
 3. Move the downloaded file to a convenient folder, then extract it using the terminal with the following command:
 
    ```bash
-   tar -xf NBTrackr-imgpin-v2.5.1.tar.xz
+   tar -xf NBTrackr-imgpin-v2.5.2.tar.xz
    ```
 4. Install the required Python packages to run NBTrackr:
 
    ```bash
-   cd NBTrackr-imgpin-v2.5.1
+   cd NBTrackr-imgpin-v2.5.2
    chmod +x install.sh
    ./install.sh
    ```
