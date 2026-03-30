@@ -2116,7 +2116,7 @@ def check_ninjabrainbot_version():
     except SystemExit:
         raise
     except Exception as e:
-        log(f"Could not connect to Ninjabrain Bot to verify version: {e}")
+        log(f"Could not connect to Ninjabrain Bot to verify version: {e}\n")
         print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
         sys.exit(1)
 
@@ -2179,7 +2179,7 @@ if __name__ == "__main__":
 
     latest = check_for_update(APP_VERSION)
     if latest:
-        print(f"\n=== New Release Available! ===")
+        print(f"=== New Release Available! ===")
         print(f"Version: {latest}")
         print("You should update to the latest version!")
         print("1) Continue with the current version")
