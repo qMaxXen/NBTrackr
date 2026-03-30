@@ -3,6 +3,7 @@ set -e
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[1;31m'
 NC='\033[0m'
 CYAN='\033[0;36m'
 
@@ -11,9 +12,22 @@ echo "        NBTrackr installer"
 echo "==================================="
 echo
 
+if command -v python3 &>/dev/null; then
+    PYTHON_BIN="python3"
+elif command -v python &>/dev/null; then
+    PYTHON_BIN="python"
+else
+    echo -e "${RED}ERROR: Python is not installed.${NC}"
+    echo "Install it via your distro package manager:"
+    echo "  Debian/Ubuntu: sudo apt install python3"
+    echo "  Arch Linux:    sudo pacman -S python"
+    echo "  Fedora:        sudo dnf install python3"
+    exit 1
+fi
+
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
-    python -m venv venv
+    "$PYTHON_BIN" -m venv venv
 else
     echo "Virtual environment already exists."
 fi
@@ -28,7 +42,7 @@ except ImportError:
     print("Installation of NBTrackr dependencies may fail.")
     print("You can install pip manually by running:")
     print("  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py")
-    print("  python get-pip.py")
+    print("  python3 get-pip.py")
 EOF
 
 "$FULL_PATH" - <<'EOF'
