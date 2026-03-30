@@ -2090,10 +2090,10 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
         w = int(width) if width is not None else pil_img.width
         h = int(height) if height is not None else pil_img.height
 
-        log(f"apply_overlay_from_pil: Applying overlay ({w}x{h}px)")
-
         place_window(w, h)
         show_window()
+
+        log(f"apply_overlay_from_pil: Applying overlay ({w}x{h}px) at ({root.winfo_x()},{root.winfo_y()})")
     except Exception as e:
         log("apply_overlay_from_pil: failed to apply overlay:", e)
 
