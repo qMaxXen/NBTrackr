@@ -2067,6 +2067,8 @@ def place_window(width, height):
         else:
             cur_x = root.winfo_x()
             cur_y = root.winfo_y()
+            if cur_x <= -9000 or cur_y <= -9000:
+                cur_x, cur_y = 0, 0
             root.geometry(f"{int(width)}x{int(height)}+{cur_x}+{cur_y}")
     except Exception:
         try:
