@@ -36,6 +36,8 @@ _last_blind = None
 _cached_customizations = None
 
 _last_custom_mtime = 0
+_last_overlay_w = 0
+_last_overlay_h = 0
 
 def get_customizations():
     global _cached_customizations
@@ -201,6 +203,7 @@ def _nb_blind_eval_color(evaluation):
 
 def generate_default_pinned_image():
     global _last_default_stronghold, _last_default_boat, _last_default_blind
+    img = None
 
     with status_lock:
         boat_resp       = dict(status["boat_resp"])
@@ -209,10 +212,6 @@ def generate_default_pinned_image():
         info_resp       = dict(status["info_resp"])
         now             = time.time()
         show_until      = status.get("showUntil", 0)
-
-    if not stronghold_resp:
-        _schedule(clear_overlay_image)
-        return
 
     result_type   = stronghold_resp.get("resultType")
     boat_state    = boat_resp.get("boatState")
@@ -254,6 +253,23 @@ def generate_default_pinned_image():
 
     ow_coords_format   = custom.get("overworld_coords_format", "four_four")
     show_adj_count     = bool(custom.get("show_angle_adjustment_count", False))
+    auto_hide_window   = bool(custom.get("auto_hide_window", True))
+
+    if not stronghold_resp:
+        if not auto_hide_window:
+            img = _render_nb_stronghold(
+                [], [], None, None, None, False,
+                font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                show_adj_count,
+                boat_state="NONE",
+                force_empty=True,
+                user_font_path=user_font_path,
+            )
+            if img:
+                _save_and_apply(img)
+                return
+        _schedule(clear_overlay_image)
+        return
 
     cache_key = (result_type, boat_state, boat_angle, in_nether,
                  repr(preds[:5]), repr(eye_throws),
@@ -322,6 +338,20 @@ def generate_default_pinned_image():
             with status_lock:
                 status["blindCurrentlyShowing"] = False
                 status["blindShowUntil"] = -1
+
+            if not auto_hide_window:
+                img = _render_nb_stronghold(
+                    preds, eye_throws, player_x, player_z, h_ang, in_nether,
+                    font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                    show_adj_count,
+                    boat_state=boat_state,
+                    force_empty=True,
+                    user_font_path=user_font_path,
+                    info_messages=info_messages,
+                )
+                if img:
+                    _save_and_apply(img)
+                    return
             _schedule(clear_overlay_image)
             return
 
@@ -382,24 +412,61 @@ def generate_default_pinned_image():
                 else:
                     _schedule(clear_overlay_image)
             else:
+                if not auto_hide_window:
+                    img = _render_nb_stronghold(
+                        [], [], None, None, None, False,
+                        font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                        show_adj_count,
+                        boat_state=boat_state,
+                        force_empty=True,
+                        user_font_path=user_font_path,
+                    )
+                    if img:
+                        _save_and_apply(img)
+                        return
                 _schedule(clear_overlay_image)
         else:
+            if not auto_hide_window:
+                img = _render_nb_stronghold(
+                    [], [], None, None, None, False,
+                    font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                    show_adj_count,
+                    boat_state=boat_state,
+                    force_empty=True,
+                    user_font_path=user_font_path,
+                )
+                if img:
+                    _save_and_apply(img)
+                    return
             _schedule(clear_overlay_image)
         return
 
-    if result_type not in ("TRIANGULATION", "BLIND") or not preds:
-        _schedule(clear_overlay_image)
-        return
-
-    img = _render_nb_stronghold(
-        preds, eye_throws, player_x, player_z, h_ang, in_nether,
-        font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
-        show_adj_count,
-        boat_state=boat_state,
-        user_font_path=user_font_path,
-        info_messages=info_messages,
-    )
     if img is None:
+        if (result_type in ("TRIANGULATION", "BLIND") and preds) or (result_type == "FAILED"):
+             img = _render_nb_stronghold(
+                preds, eye_throws, player_x, player_z, h_ang, in_nether,
+                font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                show_adj_count,
+                boat_state=boat_state,
+                user_font_path=user_font_path,
+                info_messages=info_messages,
+                failed=(result_type == "FAILED")
+            )
+
+    if img is None:
+        if not auto_hide_window:
+            img = _render_nb_stronghold(
+                preds, eye_throws, player_x, player_z, h_ang, in_nether,
+                font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
+                show_adj_count,
+                boat_state=boat_state,
+                force_empty=True,
+                user_font_path=user_font_path,
+                info_messages=info_messages,
+            )
+            if img:
+                _save_and_apply(img)
+                return
         _schedule(clear_overlay_image)
         return
 
@@ -439,7 +506,15 @@ def clear_overlay_image():
     except Exception as e:
         log("clear_overlay_image: Failed:", e)
     if not HEADLESS:
-        root.after(0, hide_window)
+        custom = get_customizations()
+        if bool(custom.get("auto_hide_window", True)):
+            root.after(0, hide_window)
+        else:
+            if bool(custom.get("use_custom_pinned_image", False)):
+                _render_and_apply_blank_custom_overlay(custom)
+            else:
+                empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+                _schedule(lambda im=empty: apply_overlay_from_pil(im))
 
 def _schedule(fn):
     if HEADLESS:
@@ -870,35 +945,35 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
             x += cw
 
         if row_idx >= len(rows):
+            x = 0
             for key in col_keys:
                 x += col_widths[key]
-            continue
+        else:
+            r = rows[row_idx]
+            x = 0
 
-        r = rows[row_idx]
-        x = 0
+            draw_coord_cell("loc", r['loc'])
 
-        draw_coord_cell("loc", r['loc'])
+            cert_txt = f"{r['cert_pct']:.1f}%"
+            draw_cell_centered("cert", cert_txt, fill=certainty_color(r['cert_pct']))
+            draw_cell_centered("dist", str(r['dist']))
+            draw_coord_cell("nether", r['nether'])
 
-        cert_txt = f"{r['cert_pct']:.1f}%"
-        draw_cell_centered("cert", cert_txt, fill=certainty_color(r['cert_pct']))
-        draw_cell_centered("dist", str(r['dist']))
-        draw_coord_cell("nether", r['nether'])
-
-        if show_angle and r['angle'] is not None:
-            cw       = col_widths["angle"]
-            base_str = r['angle']
-            dir_part = ""
-            dir_col  = NB_TEXT
-            if r['dir'] is not None:
-                arrow    = "->" if r['dir'] > 0 else "<-"
-                dir_part = f" ({arrow} {abs(r['dir']):.1f})"
-                dir_col  = gradient_color(abs(r['dir']))
-            full_w = tw(base_str) + tw(dir_part)
-            bx = x + (cw - full_w) // 2
-            draw.text((bx, text_y), base_str, font=body_font, fill=NB_TEXT)
-            if dir_part:
-                draw.text((bx + tw(base_str), text_y), dir_part, font=body_font, fill=dir_col)
-            x += cw
+            if show_angle and r['angle'] is not None:
+                cw       = col_widths["angle"]
+                base_str = r['angle']
+                dir_part = ""
+                dir_col  = NB_TEXT
+                if r['dir'] is not None:
+                    arrow    = "->" if r['dir'] > 0 else "<-"
+                    dir_part = f" ({arrow} {abs(r['dir']):.1f})"
+                    dir_col  = gradient_color(abs(r['dir']))
+                full_w = tw(base_str) + tw(dir_part)
+                bx = x + (cw - full_w) // 2
+                draw.text((bx, text_y), base_str, font=body_font, fill=NB_TEXT)
+                if dir_part:
+                    draw.text((bx + tw(base_str), text_y), dir_part, font=body_font, fill=dir_col)
+                x += cw
 
     if _display_info_messages:
         info_area_start_y = row_area_y + num_display_rows * _row_slot
@@ -1408,7 +1483,10 @@ def generate_custom_pinned_image():
 
     if show_boat_icon and result_type == "NONE":
         if boat_state == "VALID" and boat_angle == 0:
-            _schedule(clear_overlay_image)
+            if not bool(custom.get("auto_hide_window", True)):
+                _render_and_apply_blank_custom_overlay(custom)
+            else:
+                _schedule(clear_overlay_image)
             return
 
         if boat_state == last_shown and now < show_until:
@@ -1436,7 +1514,10 @@ def generate_custom_pinned_image():
                     log("Failed to save boat icon:", e)
                 _schedule(lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
-            _schedule(clear_overlay_image)
+            if not bool(custom.get("auto_hide_window", True)):
+                _render_and_apply_blank_custom_overlay(custom)
+            else:
+                _schedule(clear_overlay_image)
         return
 
     try:
@@ -1570,7 +1651,6 @@ def generate_custom_pinned_image():
             if show_adj_count:
                 angle_without = throw.get("angleWithoutCorrection", 0.0)
                 increments    = throw.get("correctionIncrements", 0) or 0
-                log("Throw", throw_idx, "adj count:", increments)
 
                 if increments != 0:
                     sign = "+" if increments >= 0 else ""
@@ -1583,13 +1663,16 @@ def generate_custom_pinned_image():
                 error_val = throw.get("error", None)
                 if error_val is not None:
                     angle_error_overlays.append((f"{error_val:.4f}",))
-                    log("Throw", throw_idx, "angle error:", error_val)
 
     log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
     if not lines:
-        _schedule(clear_overlay_image)
-        return
+        if not bool(custom.get("auto_hide_window", True)):
+            _render_and_apply_blank_custom_overlay(custom)
+            return
+        else:
+            _schedule(clear_overlay_image)
+            return
 
     font_name = custom.get("font_name", "")
     font_size = custom.get("font_size", 18)
@@ -2076,6 +2159,29 @@ def place_window(width, height):
         except Exception:
             pass
 
+def _render_and_apply_blank_custom_overlay(custom):
+    bg_hex = custom.get("background_color", "#FFFFFF")
+    bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
+
+    w = 500
+    h = 100
+
+    blank_img = Image.new("RGBA", (w, h), (*bg_rgb, 255))
+    try:
+        tmp = IMAGE_PATH + ".tmp.png"
+        blank_img.save(tmp, format="PNG")
+        try:
+            os.replace(tmp, IMAGE_PATH)
+        except Exception:
+            try:
+                if os.path.exists(IMAGE_PATH): os.remove(IMAGE_PATH)
+                os.rename(tmp, IMAGE_PATH)
+            except: pass
+    except Exception as e:
+        log("Failed to save custom overlay:", e)
+
+    _schedule(lambda im=blank_img: apply_overlay_from_pil(im))
+
 def apply_overlay_from_pil(pil_img, width=None, height=None):
     if HEADLESS:
         w = int(width) if width is not None else pil_img.width
@@ -2089,6 +2195,10 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
 
         w = int(width) if width is not None else pil_img.width
         h = int(height) if height is not None else pil_img.height
+
+        global _last_overlay_w, _last_overlay_h
+        if w > 100:
+            _last_overlay_w, _last_overlay_h = w, h
 
         place_window(w, h)
         show_window()

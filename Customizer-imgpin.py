@@ -61,7 +61,8 @@ DEFAULT_CUSTOMIZATIONS = {
     },
     "debug_mode": False,
     "idle_api_polling_rate": 0.2,
-    "max_api_polling_rate": 0.05
+    "max_api_polling_rate": 0.05,
+    "auto_hide_window": True
 }
 
 DISPLAY_NAMES = {
@@ -1651,6 +1652,7 @@ def main():
     root.resizable(False, False)
 
     use_var = tk.BooleanVar(value=custom.get("use_custom_pinned_image", False))
+    auto_hide_var = tk.BooleanVar(value=custom.get("auto_hide_window", True))
 
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True, padx=10, pady=10)
@@ -1671,6 +1673,10 @@ def main():
     f1 = tk.Frame(g); f1.pack(fill="x", pady=5)
     tk.Label(f1, text="Use custom pinned image overlay", anchor="w").pack(side="left")
     tk.Checkbutton(f1, variable=use_var, relief="flat", bd=0).pack(side="left", padx=5)
+
+    f_hide = tk.Frame(g); f_hide.pack(fill="x", pady=5)
+    tk.Label(f_hide, text="Automatically hide window when nothing to show", anchor="w").pack(side="left")
+    tk.Checkbutton(f_hide, variable=auto_hide_var, relief="flat", bd=0).pack(side="left", padx=5)
 
     f5 = tk.Frame(g); f5.pack(fill="x", pady=5)
     tk.Label(f5, text="Font", width=26, anchor="w").pack(side="left")
@@ -2158,6 +2164,7 @@ def main():
             "max_api_polling_rate": max_val,
             "portal_nether_color_enabled": portal_dist_enabled_var.get(),
             "portal_nether_color":         portal_dist_color_var.get().strip(),
+            "auto_hide_window":            auto_hide_var.get(),
         })
         save_customizations(custom)
         messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
@@ -2201,6 +2208,7 @@ def main():
             debug_var.set(custom["debug_mode"])
             idle_rate_var.set(custom["idle_api_polling_rate"])
             max_rate_var.set(custom["max_api_polling_rate"])
+            auto_hide_var.set(custom.get("auto_hide_window", True))
             order[:] = custom["text_order"]
             for k, var in check_vars.items():
                 var.set(custom["text_enabled"].get(k, True))
