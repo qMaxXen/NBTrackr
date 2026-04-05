@@ -23,6 +23,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
+LOG_FILE = os.path.join(CONFIG_DIR, "latest.log")
 HEADLESS = "--headless" in sys.argv
 
 position_set = False
@@ -64,6 +65,69 @@ def _load_advanced_settings():
         return False, 0.2, 0.05
 
 DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
+
+if DEBUG_MODE:
+    def log(*args):
+        print(datetime.now().strftime("[%H:%M:%S]"), *args)
+else:
+    def log(*args):
+        pass
+
+def _setup_log_file():
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.write(f"NBTrackr {APP_VERSION} Log Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("-" * 40 + "\n")
+            if not DEBUG_MODE:
+                f.write("Debug mode is disabled. Full console output will not be captured to this file.\n")
+                f.write("To enable logging, enable 'Debug mode' in nbtrackr --settings.\n")
+    except Exception as e:
+        sys.stderr.write(f"Failed to initialize log file at {LOG_FILE}: {e}\n")
+        return
+
+    if not DEBUG_MODE:
+        return
+
+    class TeeWriter:
+        def __init__(self, original, log_path):
+            self._original = original
+            self._file = open(log_path, "a", encoding="utf-8")
+
+        def write(self, text):
+            self._original.write(text)
+            try:
+                self._file.write(text)
+                self._file.flush()
+            except Exception as e:
+                self._original.write(f"\n[Logging Internal Error] {e}\n")
+
+        def flush(self):
+            self._original.flush()
+            try:
+                self._file.flush()
+            except Exception:
+                pass
+
+        def close(self):
+            try:
+                self._file.close()
+            except Exception:
+                pass
+
+        def __getattr__(self, name):
+            return getattr(self._original, name)
+
+    stdout_tee = TeeWriter(sys.stdout, LOG_FILE)
+    stderr_tee = TeeWriter(sys.stderr, LOG_FILE)
+
+    sys.stdout = stdout_tee
+    sys.stderr = stderr_tee
+
+    atexit.register(stdout_tee.close)
+    atexit.register(stderr_tee.close)
+
+_setup_log_file()
 
 def gradient_color(angle: float):
     if angle <= 90:
@@ -2041,9 +2105,6 @@ def check_for_update(current_version):
         return latest_version
     return None
 
-def log(*args):
-    if DEBUG_MODE:
-        print(datetime.now().strftime("[%H:%M:%S]"), *args)
 
 _window_hiding_method = None
 
