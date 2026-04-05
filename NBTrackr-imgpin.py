@@ -68,7 +68,9 @@ DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_setting
 
 if DEBUG_MODE:
     def log(*args):
-        print(datetime.now().strftime("[%H:%M:%S]"), *args)
+        timestamp = datetime.now().strftime("[%H:%M:%S]")
+        msg = " ".join(map(str, args))
+        print(f"{timestamp} {msg}")
 else:
     def log(*args):
         pass
@@ -93,21 +95,24 @@ def _setup_log_file():
         def __init__(self, original, log_path):
             self._original = original
             self._file = open(log_path, "a", encoding="utf-8")
+            self._lock = threading.Lock()
 
         def write(self, text):
-            self._original.write(text)
-            try:
-                self._file.write(text)
-                self._file.flush()
-            except Exception as e:
-                self._original.write(f"\n[Logging Internal Error] {e}\n")
+            with self._lock:
+                self._original.write(text)
+                try:
+                    self._file.write(text)
+                    self._file.flush()
+                except Exception as e:
+                    self._original.write(f"\n[Logging Internal Error] {e}\n")
 
         def flush(self):
-            self._original.flush()
-            try:
-                self._file.flush()
-            except Exception:
-                pass
+            with self._lock:
+                self._original.flush()
+                try:
+                    self._file.flush()
+                except Exception:
+                    pass
 
         def close(self):
             try:
@@ -2068,7 +2073,7 @@ def generate_custom_pinned_image():
         img.save(tmp, format="PNG")
         try:
             os.replace(tmp, IMAGE_PATH)
-            log("Saved overlay image:", IMAGE_PATH)
+            log(f"Saved overlay image: {IMAGE_PATH}")
         except Exception:
             try:
                 if os.path.exists(IMAGE_PATH):
@@ -2192,6 +2197,7 @@ def show_window():
     global _window_visible
     _window_visible = True
     method = get_window_hiding_method()
+    log("[Window] Showing overlay window")
     try:
         if method == "withdraw":
             root.deiconify()
@@ -2199,8 +2205,8 @@ def show_window():
             root.update()
         else:
             root.update_idletasks()
-    except Exception:
-        pass
+    except Exception as e:
+        log(f"[Window] Failed to show window: {e}")
 
 def hide_window():
     if HEADLESS:
@@ -2211,6 +2217,7 @@ def hide_window():
     try:
         if method == "withdraw":
             root.withdraw()
+            log(f"[Window] Hiding overlay window (Method: {method})")
         elif method == "one_pixel":
             try:
                 label.config(image=TRANSPARENT_TK)
@@ -2219,11 +2226,13 @@ def hide_window():
                 pass
             root.geometry("1x1+0+0")
             root.update_idletasks()
+            log(f"[Window] Hiding overlay window (Method: {method}, Geometry: {root.geometry()})")
         else:
             root.geometry("+-10000+-10000")
             root.update_idletasks()
-    except Exception:
-        pass
+            log(f"[Window] Hiding overlay window (Method: {method}, Geometry: {root.geometry()})")
+    except Exception as e:
+        log(f"[Window] Failed to hide window: {e}")
 
 def place_window(width, height):
     if HEADLESS:
@@ -2325,7 +2334,7 @@ def load_config():
     try:
         if not os.path.exists(CONFIG_DIR):
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            log(f"Created config directory: {CONFIG_DIR}")
+            log(f"[Config] Created config directory: {CONFIG_DIR}")
 
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, "r") as f:
@@ -2335,26 +2344,26 @@ def load_config():
                 x = pos.get("x")
                 y = pos.get("y")
                 if isinstance(x, int) and isinstance(y, int):
-                    log(f"Loaded window position from config: x={x}, y={y}")
+                    log(f"[Config] Loaded window position: x={x}, y={y}")
                     return x, y
     except Exception as e:
-        log(f"Failed to load config: {e}")
+        log(f"[Config] Failed to load settings.json: {e}")
     return None
 
 def save_config():
     try:
         if not os.path.exists(CONFIG_DIR):
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            log(f"Created config directory: {CONFIG_DIR}")
+            log(f"[Config] Created config directory: {CONFIG_DIR}")
 
         x = root.winfo_x()
         y = root.winfo_y()
         config = {"position": {"x": x, "y": y}}
         with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=2)
-        log(f"Saved window position to config: x={x}, y={y}")
+        log(f"[Config] Saved window position: x={x}, y={y}")
     except Exception as e:
-        log(f"Failed to save config: {e}")
+        log(f"[Config] Failed to save settings.json: {e}")
 
 def load_customizations():
     try:
@@ -2363,10 +2372,10 @@ def load_customizations():
                 data = json.load(f)
             val = data.get("use_custom_pinned_image", False)
             if isinstance(val, bool):
-                log(f"Customizations: use_custom_pinned_image = {val}")
+                log(f"[Config] Customizations reloaded from disk (use_custom_pinned_image: {val})")
                 return val
     except Exception as e:
-        log(f"Failed to load customizations: {e}")
+        log(f"[Config] Failed to load customizations.json: {e}")
     return False
 
 if __name__ == "__main__":
@@ -2471,6 +2480,7 @@ def idle_update_frequency():
     return IDLE_API_POLLING_RATE
 
 def api_polling_thread():
+    log("[System] API polling thread started")
     _nb_was_connected = False
     _nb_error_printed = False
 
@@ -2483,6 +2493,7 @@ def api_polling_thread():
 
             if not _nb_was_connected:
                 print("Connected to Ninjabrain Bot.")
+                log("[Connection] Successfully connected to Ninjabrain Bot API")
                 _nb_was_connected = True
                 _nb_error_printed = False
 
@@ -2586,13 +2597,15 @@ def api_polling_thread():
                     status["showUntil"] = 0
                     status["lastAngle"] = None
 
-        except Exception:
+        except Exception as e:
             if _nb_was_connected:
                 print("ERROR: Lost connection to Ninjabrain Bot.")
+                log(f"[Connection] Connection lost: {e}")
                 _nb_was_connected = False
                 _nb_error_printed = False
             if not _nb_error_printed:
                 print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
+                log(f"[Connection] Failed to connect: {e}")
                 _nb_error_printed = True
 
             with status_lock:
@@ -2612,6 +2625,7 @@ def api_polling_thread():
         time.sleep(MAX_API_POLLING_RATE)
 
 def image_update_thread():
+    log("[System] Image generation thread started")
     while True:
         if USE_CUSTOM_PINNED_IMAGE:
             generate_custom_pinned_image()
@@ -2620,6 +2634,7 @@ def image_update_thread():
         time.sleep(idle_update_frequency())
 
 def blind_timer_monitor_thread():
+    log("[System] Timer monitor thread started")
     while True:
         with status_lock:
             blind_show_until = status["blindShowUntil"]
@@ -2670,6 +2685,7 @@ def update_image():
 
 
 def start_move(event):
+    log("[Window] Manual window repositioning started")
     root._drag_start_x = event.x
     root._drag_start_y = event.y
 
@@ -2681,7 +2697,7 @@ def on_motion(event):
 def on_release(event):
     if root.winfo_width() > 1 and root.winfo_height() > 1:
         save_config()
-
+        log(f"[Window] Manual window repositioning finished (Geometry: {root.geometry()})")
 
 threading.Thread(target=api_polling_thread, daemon=True).start()
 threading.Thread(target=image_update_thread, daemon=True).start()
