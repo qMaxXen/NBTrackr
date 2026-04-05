@@ -70,7 +70,8 @@ if DEBUG_MODE:
     def log(*args):
         timestamp = datetime.now().strftime("[%H:%M:%S]")
         msg = " ".join(map(str, args))
-        print(f"{timestamp} {msg}")
+        sys.stdout.write(f"{timestamp} {msg}\n")
+        sys.stdout.flush()
 else:
     def log(*args):
         pass
@@ -83,7 +84,7 @@ def _setup_log_file():
             f.write("-" * 40 + "\n")
             if not DEBUG_MODE:
                 f.write("Debug mode is disabled. Full console output will not be captured to this file.\n")
-                f.write("To enable logging, enable 'Debug mode' in nbtrackr --settings.\n")
+                f.write("To enable logging, toggle 'Debug mode' in nbtrackr --settings.\n")
     except Exception as e:
         sys.stderr.write(f"Failed to initialize log file at {LOG_FILE}: {e}\n")
         return
@@ -1367,7 +1368,7 @@ def generate_custom_pinned_image():
             should_hide = True
 
         if should_hide:
-            log("Hiding blind info and clearing cache for regeneration")
+            log("[Render] Hiding blind info (Clearing cache for regeneration)")
             with status_lock:
                 status["blindCurrentlyShowing"] = False
             _last_blind = None
@@ -1403,7 +1404,6 @@ def generate_custom_pinned_image():
             )
 
             if blind_currently_showing and blind_cache_key == _last_blind:
-                log("Blind info unchanged, skipping regeneration")
                 return
 
             _last_blind = blind_cache_key
@@ -1485,9 +1485,9 @@ def generate_custom_pinned_image():
 
             try:
                 img.save(IMAGE_PATH)
-                log(f"Saved blind overlay image, timer expires at {blind_show_until:.2f}")
+                log(f"[Render] Saved blind overlay image (Expires: {blind_show_until:.2f})")
             except Exception as e:
-                log("Failed to save blind overlay image:", e)
+                log("[Render] Failed to save blind overlay image:", e)
 
             with status_lock:
                 status["blindCurrentlyShowing"] = True
@@ -1498,7 +1498,7 @@ def generate_custom_pinned_image():
     if result_type == "TRIANGULATION":
         with status_lock:
             if status["blindShowUntil"] > 0:
-                log("Result type is TRIANGULATION, clearing blind timer")
+                log("[System] Result type is TRIANGULATION (Clearing blind timer)")
                 status["blindShowUntil"] = 0
 
     if show_error_message and result_type == "FAILED":
@@ -1538,7 +1538,7 @@ def generate_custom_pinned_image():
         try:
             img.save(IMAGE_PATH)
         except Exception as e:
-            log("Failed to save overlay image (error message):", e)
+            log("[Render] Failed to save overlay image (Error message):", e)
         _schedule(lambda im=img: apply_overlay_from_pil(im))
         return
 
@@ -1562,7 +1562,7 @@ def generate_custom_pinned_image():
                 icon = Image.open(icon_path).convert("RGBA")
                 icon = icon.resize((64, 64), Image.LANCZOS)
             except Exception as e:
-                log("Failed to load/process icon:", e)
+                log("[Render] Failed to load/process icon:", e)
             else:
                 tmp = IMAGE_PATH + ".tmp.png"
                 try:
@@ -1575,9 +1575,9 @@ def generate_custom_pinned_image():
                                 os.remove(IMAGE_PATH)
                             os.rename(tmp, IMAGE_PATH)
                         except Exception as e2:
-                            log("Failed to save boat icon to IMAGE_PATH:", e2)
+                            log("[Render] Failed to save boat icon to IMAGE_PATH:", e2)
                 except Exception as e:
-                    log("Failed to save boat icon:", e)
+                    log("[Render] Failed to save boat icon:", e)
                 _schedule(lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
             if not bool(custom.get("auto_hide_window", True)):
@@ -1721,8 +1721,6 @@ def generate_custom_pinned_image():
                 error_val = throw.get("error", None)
                 if error_val is not None:
                     angle_error_overlays.append((f"{error_val:.4f}",))
-
-    log("generate_custom_pinned_image: predictions lines:", len(lines), "resultType:", result_type, "boatState:", boat_state)
 
     if not lines:
         if not bool(custom.get("auto_hide_window", True)):
@@ -2073,17 +2071,17 @@ def generate_custom_pinned_image():
         img.save(tmp, format="PNG")
         try:
             os.replace(tmp, IMAGE_PATH)
-            log(f"Saved overlay image: {IMAGE_PATH}")
+            log(f"[Render] Saved overlay image: {IMAGE_PATH}")
         except Exception:
             try:
                 if os.path.exists(IMAGE_PATH):
                     os.remove(IMAGE_PATH)
                 os.rename(tmp, IMAGE_PATH)
-                log("Saved overlay image via fallback rename:", IMAGE_PATH)
+                log(f"[Render] Saved overlay image (Fallback rename): {IMAGE_PATH}")
             except Exception as e:
-                log("Failed to move tmp overlay file into place:", e)
+                log("[Render] Failed to move tmp overlay file into place:", e)
     except Exception as e:
-        log("Failed to save overlay image:", e)
+        log("[Render] Failed to save overlay image:", e)
 
     _schedule(lambda im=img: apply_overlay_from_pil(im))
 
@@ -2282,7 +2280,7 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
     if HEADLESS:
         w = int(width) if width is not None else pil_img.width
         h = int(height) if height is not None else pil_img.height
-        log(f"apply_overlay_from_pil: Headless mode, overlay written ({w}x{h}px)")
+        log(f"[System] Headless mode: overlay written ({w}x{h}px)")
         return
     try:
         tk_img = ImageTk.PhotoImage(pil_img)
@@ -2299,9 +2297,9 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
         place_window(w, h)
         show_window()
 
-        log(f"apply_overlay_from_pil: Applying overlay ({w}x{h}px) at ({root.winfo_x()},{root.winfo_y()})")
+        log(f"[Window] Applying overlay ({w}x{h}px) at ({root.winfo_x()},{root.winfo_y()})")
     except Exception as e:
-        log("apply_overlay_from_pil: failed to apply overlay:", e)
+        log(f"[Window] Failed to apply overlay: {e}")
 
 def check_ninjabrainbot_version():
     try:
