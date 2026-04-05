@@ -38,6 +38,7 @@ _cached_customizations = None
 _last_custom_mtime = 0
 _last_overlay_w = 0
 _last_overlay_h = 0
+_window_visible = False
 
 def get_customizations():
     global _cached_customizations
@@ -279,13 +280,9 @@ def generate_default_pinned_image():
                  player_x, player_z, h_ang,
                  int(show_until * 10) if show_until != float("inf") else sys.maxsize)
     if (cache_key == _last_default_stronghold and
-            boat_resp == _last_default_boat):
-        try:
-            visible = root.winfo_x() > -9000
-        except Exception:
-            visible = True
-        if visible:
-            return
+            boat_resp == _last_default_boat and
+            _window_visible):
+        return
 
     _last_default_stronghold = cache_key
     _last_default_boat = boat_resp
@@ -1520,15 +1517,7 @@ def generate_custom_pinned_image():
                 _schedule(clear_overlay_image)
         return
 
-    try:
-        visible = root.winfo_x() > -9000
-    except Exception:
-        visible = True
-
-    if (custom == _last_custom and
-        boat_resp == _last_boat and
-        stronghold_resp == _last_stronghold and
-        visible):
+    if custom == _last_custom and boat_resp == _last_boat and stronghold_resp == _last_stronghold and _window_visible:
         return
 
     _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
@@ -2056,6 +2045,20 @@ def log(*args):
     if DEBUG_MODE:
         print(datetime.now().strftime("[%H:%M:%S]"), *args)
 
+_window_hiding_method = None
+
+def get_window_hiding_method():
+    global _window_hiding_method
+    if _window_hiding_method is not None:
+        return _window_hiding_method
+    try:
+        with open(CUSTOMIZATIONS_FILE, "r") as f:
+            data = json.load(f)
+        _window_hiding_method = data.get("hide_method", "withdraw")
+    except Exception:
+        _window_hiding_method = "withdraw"
+    log(f"[Window] Hide method loaded from config: '{_window_hiding_method}'")
+    return _window_hiding_method
 
 # ---------------------- AUTO UPDATER ----------------------
 
@@ -2125,17 +2128,39 @@ def check_and_update(current_version):
 def show_window():
     if HEADLESS:
         return
+    global _window_visible
+    _window_visible = True
+    method = get_window_hiding_method()
     try:
-        root.update_idletasks()
+        if method == "withdraw":
+            root.deiconify()
+            root.lift()
+            root.update()
+        else:
+            root.update_idletasks()
     except Exception:
         pass
 
 def hide_window():
     if HEADLESS:
         return
+    global _window_visible
+    _window_visible = False
+    method = get_window_hiding_method()
     try:
-        root.geometry(f"+{-10000}+{-10000}")
-        root.update_idletasks()
+        if method == "withdraw":
+            root.withdraw()
+        elif method == "one_pixel":
+            try:
+                label.config(image=TRANSPARENT_TK)
+                label.image = TRANSPARENT_TK
+            except Exception:
+                pass
+            root.geometry("1x1+0+0")
+            root.update_idletasks()
+        else:
+            root.geometry("+-10000+-10000")
+            root.update_idletasks()
     except Exception:
         pass
 
@@ -2147,6 +2172,7 @@ def place_window(width, height):
         if pos:
             sx, sy = pos
             root.geometry(f"{int(width)}x{int(height)}+{int(sx)}+{int(sy)}")
+            root.update()
         else:
             cur_x = root.winfo_x()
             cur_y = root.winfo_y()
@@ -2330,6 +2356,26 @@ else:
 
     TRANSPARENT_IMG = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     TRANSPARENT_TK = ImageTk.PhotoImage(TRANSPARENT_IMG)
+    
+    try:
+        root.wm_attributes("-type", "tooltip")
+    except Exception as e:
+        log("Could not set window type to tooltip:", e)
+
+    _init_hiding_method = get_window_hiding_method()
+    if _init_hiding_method == "withdraw":
+        root.withdraw()
+    elif _init_hiding_method == "one_pixel":
+        try:
+            label.config(image=TRANSPARENT_TK)
+            label.image = TRANSPARENT_TK
+        except Exception:
+            pass
+        root.geometry("1x1+0+0")
+        root.update_idletasks()
+    else:
+        root.geometry("+-10000+-10000")
+        root.update_idletasks()
 
 image_queue = queue.Queue(maxsize=1)
 
@@ -2572,7 +2618,8 @@ def on_motion(event):
     root.geometry(f"+{x}+{y}")
 
 def on_release(event):
-    save_config()
+    if root.winfo_width() > 1 and root.winfo_height() > 1:
+        save_config()
 
 
 threading.Thread(target=api_polling_thread, daemon=True).start()

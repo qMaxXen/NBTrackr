@@ -62,7 +62,8 @@ DEFAULT_CUSTOMIZATIONS = {
     "debug_mode": False,
     "idle_api_polling_rate": 0.2,
     "max_api_polling_rate": 0.05,
-    "auto_hide_window": True
+    "auto_hide_window": True,
+    "hide_method": "withdraw"
 }
 
 DISPLAY_NAMES = {
@@ -2012,6 +2013,29 @@ def main():
                              anchor="w", fg="#666666", font=("Helvetica", 9, "italic"))
     max_rate_hint.pack(fill="x", pady=(0, 5))
 
+    f_hide_method = tk.Frame(adv); f_hide_method.pack(fill="x", pady=5)
+    tk.Label(f_hide_method, text="Window hide method", width=26, anchor="w").pack(side="left")
+    _HIDE_METHOD_DISPLAY = {
+        "withdraw":   "Withdraw (recommended)",
+        "one_pixel":  "1x1 px corner",
+        "offscreen":  "Move off-screen",
+    }
+    _HIDE_METHOD_KEY_FROM_DISPLAY = {v: k for k, v in _HIDE_METHOD_DISPLAY.items()}
+    hide_method_var = tk.StringVar(
+        value=_HIDE_METHOD_DISPLAY.get(custom.get("hide_method", "withdraw"),
+                                        "Withdraw (recommended)"))
+    hide_method_combo = ttk.Combobox(f_hide_method, textvariable=hide_method_var,
+                                    state="readonly", width=28)
+    hide_method_combo['values'] = list(_HIDE_METHOD_DISPLAY.values())
+    hide_method_combo.pack(side="left", padx=5)
+    hide_method_combo.bind("<<ComboboxSelected>>", lambda ev: ev.widget.selection_clear())
+    hide_method_hint = tk.Label(adv,
+        text="  Withdraw: fully hides the window. Use this unless the window steals focus whenever shown.\n"
+             "  1x1 px corner / Move off-screen: keeps the window mapped to prevent it from\n"
+             "  stealing focus on some DEs / WMs.",
+        anchor="w", justify="left", fg="#666666", font=("Helvetica", 9, "italic"))
+    hide_method_hint.pack(fill="x", pady=(0, 5))
+
     _preview_vars = {
         "order":        order,
         "check_vars":   check_vars,
@@ -2034,6 +2058,8 @@ def main():
         "dim_var":      dim_var,
         "portal_dist_enabled_var": portal_dist_enabled_var,
         "portal_dist_color_var":   portal_dist_color_var,
+        "hide_method_var":         hide_method_var,
+        "_HIDE_METHOD_KEY_FROM_DISPLAY": _HIDE_METHOD_KEY_FROM_DISPLAY,
     }
 
     def update_blind_hide_after_state(*_):
@@ -2165,6 +2191,8 @@ def main():
             "portal_nether_color_enabled": portal_dist_enabled_var.get(),
             "portal_nether_color":         portal_dist_color_var.get().strip(),
             "auto_hide_window":            auto_hide_var.get(),
+            "hide_method":                 _HIDE_METHOD_KEY_FROM_DISPLAY.get(
+                                               hide_method_var.get(), "withdraw"),
         })
         save_customizations(custom)
         messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
@@ -2209,6 +2237,9 @@ def main():
             idle_rate_var.set(custom["idle_api_polling_rate"])
             max_rate_var.set(custom["max_api_polling_rate"])
             auto_hide_var.set(custom.get("auto_hide_window", True))
+            hide_method_var.set(_HIDE_METHOD_DISPLAY.get(
+                custom.get("hide_method", "withdraw"),
+                "Withdraw (recommended)"))
             order[:] = custom["text_order"]
             for k, var in check_vars.items():
                 var.set(custom["text_enabled"].get(k, True))
