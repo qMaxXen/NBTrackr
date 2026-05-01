@@ -35,14 +35,18 @@ fi
 FULL_PATH="$(pwd)/venv/bin/python"
 
 "$FULL_PATH" - <<'EOF'
+import sys
 try:
     import pip
 except ImportError:
-    print("WARNING: pip is not installed in this virtual environment.")
-    print("Installation of NBTrackr dependencies may fail.")
-    print("You can install pip manually by running:")
+    print("ERROR: pip is not installed in this virtual environment.")
+    print("Installation of NBTrackr dependencies will fail.")
+    print("You can try to fix this by running:")
+    print(f"  {sys.executable} -m ensurepip")
+    print("Or manually via:")
     print("  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py")
-    print("  python3 get-pip.py")
+    print(f"  {sys.executable} get-pip.py")
+    sys.exit(1)
 EOF
 
 "$FULL_PATH" - <<'EOF'
