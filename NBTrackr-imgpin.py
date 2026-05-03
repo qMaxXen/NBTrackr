@@ -22,6 +22,7 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
 HEADLESS = "--headless" in sys.argv
+LOCK_OVERLAY = "--lock-overlay" in sys.argv
 
 position_set = False
 
@@ -2646,8 +2647,9 @@ if HEADLESS:
     except KeyboardInterrupt:
         pass
 else:
-    root.bind("<ButtonPress-1>", start_move)
-    root.bind("<B1-Motion>", on_motion)
-    root.bind("<ButtonRelease-1>", on_release)
+    if not LOCK_OVERLAY:
+        root.bind("<ButtonPress-1>", start_move)
+        root.bind("<B1-Motion>", on_motion)
+        root.bind("<ButtonRelease-1>", on_release)
     root.after(100, update_image)
     root.mainloop()
