@@ -1,18 +1,19 @@
 import sys
-import tkinter as tk
-from tkinter import font
-from PIL import Image, ImageTk, UnidentifiedImageError, ImageDraw, ImageFont
 import math
 import os
 import threading
-import queue
 import time
 import requests
-from datetime import datetime
 import json
 import tempfile
 import tarfile
 import re
+import signal
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
+from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout
+from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal
+from PyQt5.QtGui import QPixmap, QImage
 
 # Program Version
 APP_VERSION = "v2.5.2"
@@ -131,6 +132,11 @@ def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
 
 def _strip_html(text):
     return re.sub(r'<[^>]+>', '', text)
+
+def _with_alpha(color, alpha_float):
+    r, g, b = color[0], color[1], color[2]
+    a = max(0, min(255, int(alpha_float * 255)))
+    return (r, g, b, a)
 
 # --------------------- Cache End --------------------------
 
@@ -264,6 +270,9 @@ def generate_default_pinned_image():
     show_adj_count     = bool(custom.get("show_angle_adjustment_count", False))
     auto_hide_window   = bool(custom.get("auto_hide_window", True))
 
+    bg_opacity   = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
+    text_opacity = max(0.0, min(1.0, float(custom.get("text_opacity", 1.0))))
+
     if not stronghold_resp:
         if not auto_hide_window:
             img = _render_nb_stronghold(
@@ -273,6 +282,7 @@ def generate_default_pinned_image():
                 boat_state="NONE",
                 force_empty=True,
                 user_font_path=user_font_path,
+                bg_opacity=bg_opacity, text_opacity=text_opacity,
             )
             if img:
                 _save_and_apply(img)
@@ -286,6 +296,7 @@ def generate_default_pinned_image():
                  neg_coords_enabled, neg_coords_rgb, ow_coords_format,
                  show_adj_count, user_font_path,
                  player_x, player_z, h_ang,
+                 bg_opacity, text_opacity,
                  int(show_until * 10) if show_until != float("inf") else sys.maxsize)
     if (cache_key == _last_default_stronghold and
             boat_resp == _last_default_boat and
@@ -333,6 +344,7 @@ def generate_default_pinned_image():
                 boat_state=boat_state,
                 user_font_path=user_font_path,
                 info_messages=info_messages,
+                bg_opacity=bg_opacity, text_opacity=text_opacity,
             )
             if img is None:
                 _schedule(clear_overlay_image)
@@ -353,6 +365,7 @@ def generate_default_pinned_image():
                     force_empty=True,
                     user_font_path=user_font_path,
                     info_messages=info_messages,
+                    bg_opacity=bg_opacity, text_opacity=text_opacity,
                 )
                 if img:
                     _save_and_apply(img)
@@ -375,9 +388,10 @@ def generate_default_pinned_image():
             boat_state=boat_state,
             user_font_path=user_font_path,
             info_messages=info_messages,
+            bg_opacity=bg_opacity, text_opacity=text_opacity,
         )
         if img is None:
-            img = _render_nb_failed_standalone(font_size)
+            img = _render_nb_failed_standalone(font_size, bg_opacity=bg_opacity, text_opacity=text_opacity)
         _save_and_apply(img)
         return
 
@@ -398,6 +412,7 @@ def generate_default_pinned_image():
                     boat_state=boat_state,
                     force_empty=True,
                     user_font_path=user_font_path,
+                    bg_opacity=bg_opacity, text_opacity=text_opacity,
                 )
                 if img is not None:
                     _save_and_apply(img)
@@ -411,6 +426,7 @@ def generate_default_pinned_image():
                     boat_state="VALID",
                     force_empty=True,
                     user_font_path=user_font_path,
+                    bg_opacity=bg_opacity, text_opacity=text_opacity,
                 )
                 if img is not None:
                     _save_and_apply(img)
@@ -425,6 +441,7 @@ def generate_default_pinned_image():
                         boat_state=boat_state,
                         force_empty=True,
                         user_font_path=user_font_path,
+                        bg_opacity=bg_opacity, text_opacity=text_opacity,
                     )
                     if img:
                         _save_and_apply(img)
@@ -439,6 +456,7 @@ def generate_default_pinned_image():
                     boat_state=boat_state,
                     force_empty=True,
                     user_font_path=user_font_path,
+                    bg_opacity=bg_opacity, text_opacity=text_opacity,
                 )
                 if img:
                     _save_and_apply(img)
@@ -448,14 +466,15 @@ def generate_default_pinned_image():
 
     if img is None:
         if (result_type in ("TRIANGULATION", "BLIND") and preds) or (result_type == "FAILED"):
-             img = _render_nb_stronghold(
+            img = _render_nb_stronghold(
                 preds, eye_throws, player_x, player_z, h_ang, in_nether,
                 font_size, neg_coords_enabled, neg_coords_rgb, ow_coords_format,
                 show_adj_count,
                 boat_state=boat_state,
                 user_font_path=user_font_path,
                 info_messages=info_messages,
-                failed=(result_type == "FAILED")
+                failed=(result_type == "FAILED"),
+                bg_opacity=bg_opacity, text_opacity=text_opacity,
             )
 
     if img is None:
@@ -468,6 +487,7 @@ def generate_default_pinned_image():
                 force_empty=True,
                 user_font_path=user_font_path,
                 info_messages=info_messages,
+                bg_opacity=bg_opacity, text_opacity=text_opacity,
             )
             if img:
                 _save_and_apply(img)
@@ -513,7 +533,7 @@ def clear_overlay_image():
     if not HEADLESS:
         custom = get_customizations()
         if bool(custom.get("auto_hide_window", True)):
-            root.after(0, hide_window)
+            _schedule(hide_window)
         else:
             if bool(custom.get("use_custom_pinned_image", False)):
                 _render_and_apply_blank_custom_overlay(custom)
@@ -525,10 +545,10 @@ def _schedule(fn):
     if HEADLESS:
         fn()
     else:
-        root.after(0, fn)
+        _scheduler.schedule(fn)
 
 def _make_draw_surface(w, h):
-    img = Image.new("RGBA", (w, h), NB_ROW_BG)
+    img  = Image.new("RGBA", (w, h), NB_ROW_BG)
     draw = ImageDraw.Draw(img)
     return img, draw
 
@@ -537,10 +557,31 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                            neg_coords_rgb, ow_coords_format, show_adj_count,
                            blind_result=None, failed=False,
                            boat_state=None, force_empty=False, user_font_path="",
-                           info_messages=None):
+                           info_messages=None,
+                           bg_opacity=1.0, text_opacity=1.0):
     if info_messages is None:
         info_messages = []
     show_angle = (h_ang is not None and player_x is not None and player_z is not None)
+
+    def _bc(color):
+        return _with_alpha(color[:3], bg_opacity)
+
+    def _tc(color):
+        return _with_alpha(color[:3], text_opacity)
+
+    def _tc_dyn(color):
+        return _with_alpha(color[:3], text_opacity)
+
+    _NB_ROW_BG    = _bc(NB_ROW_BG)
+    _NB_HEADER_BG = _bc(NB_HEADER_BG)
+    _NB_HDR_SEP   = _bc(NB_HDR_SEP)
+    _NB_ROW_SEP   = _bc(NB_ROW_SEP)
+    _NEW_HEADER_BG = _bc((0x21, 0x25, 0x29))
+
+    _NB_TEXT         = _tc(NB_TEXT)
+    _NB_THROW_HDR_FG = _tc(NB_THROW_HEADER_FG)
+    _NEW_HDR_VER_FG  = _tc((0x80, 0x80, 0x80))
+    _PORTAL_WARN_COLOR = _tc(NB_THROW_HEADER_FG)
 
     def _load_font_for_size(size):
         if user_font_path:
@@ -550,20 +591,16 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                 pass
         return _load_nb_font(size)
 
-    hdr_font   = _load_font_for_size(font_size)
-    body_font  = _load_font_for_size(font_size)
+    hdr_font         = _load_font_for_size(font_size)
+    body_font        = _load_font_for_size(font_size)
 
-    portal_warn_font    = _load_font_for_size(max(8, int(font_size * 0.85)))
-    portal_warn_color   = NB_THROW_HEADER_FG
-    small_font          = _load_font_for_size(max(8, int(font_size * 0.85)))
-    new_header_font     = _load_font_for_size(max(10, int(font_size * 1.05)))
+    portal_warn_font = _load_font_for_size(max(8, int(font_size * 0.85)))
+    small_font       = _load_font_for_size(max(8, int(font_size * 0.85)))
+    new_header_font  = _load_font_for_size(max(10, int(font_size * 1.05)))
     new_header_ver_font = _load_font_for_size(max(8, int(font_size * 0.85)))
 
     a_new, d_new = new_header_font.getmetrics()
     new_header_h = a_new + d_new + 8
-
-    NEW_HEADER_BG = (0x21, 0x25, 0x29)
-    NEW_HEADER_VER_FG = (0x80, 0x80, 0x80)
 
     dummy_img  = Image.new("RGBA", (1, 1))
     dummy_draw = ImageDraw.Draw(dummy_img)
@@ -579,10 +616,10 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
     CELL_PAD_THROW = 14
     HDR_SEP        = 1
     ROW_SEP        = 1
-    body_h       = th(body_font)  + 4
-    throw_body_h = th(body_font)  + 2
-    hdr_h     = th(hdr_font)   + 4
-    small_h = th(small_font) + 2
+    body_h         = th(body_font)  + 4
+    throw_body_h   = th(body_font)  + 2
+    hdr_h          = th(hdr_font)   + 4
+    small_h        = th(small_font) + 2
 
     rows = []
     for pred in preds[:5]:
@@ -702,12 +739,10 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
 
         x_val = t.get("xInOverworld", 0.0) or 0.0
         z_val = t.get("zInOverworld", 0.0) or 0.0
-        x_str = f"{float(x_val):.2f}"
-        z_str = f"{float(z_val):.2f}"
 
         throw_rows_data.append((
-            x_str,
-            z_str,
+            f"{float(x_val):.2f}",
+            f"{float(z_val):.2f}",
             angle_cell,
             f"{t.get('error', 0.0):.4f}",
         ))
@@ -795,15 +830,13 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
     if leftover < 0:
         leftover = 0
 
-    outer_bonus = int(leftover * 0.20)
+    outer_bonus  = int(leftover * 0.20)
     centre_bonus = int(leftover * 0.30)
-
     throw_col_widths = list(throw_nat)
     throw_col_widths[0] += outer_bonus
     throw_col_widths[1] += centre_bonus
     throw_col_widths[2] += centre_bonus
     throw_col_widths[3] += outer_bonus
-
     throw_total = sum(throw_col_widths)
     if throw_total < img_w:
         diff = img_w - throw_total
@@ -812,10 +845,10 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
         throw_col_widths[2] += diff // 4
         throw_col_widths[3] += img_w - throw_total - 3 * (diff // 4)
 
+    show_portal_warning = any(m.get("type") == "PORTAL_LINKING" for m in info_messages)
+
     top_headers_h = hdr_h
     top_headers_gap = HDR_SEP
-
-    show_portal_warning = any(m.get("type") == "PORTAL_LINKING" for m in info_messages)
 
     _row_slot = body_h + (ROW_SEP if not hide_row_dividers else 0)
     main_h = new_header_h + HDR_SEP + HDR_SEP + top_headers_h + HDR_SEP + num_display_rows * _row_slot
@@ -824,12 +857,14 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
         m for m in info_messages
         if m.get("type") in ("PORTAL_LINKING", "NEXT_THROW_DIRECTION", "MISMEASURE", "COMBINED_CERTAINTY")
     ]
-    warn_text_h = th(portal_warn_font)
+    warn_text_h    = th(portal_warn_font)
     _TWO_LINE_TYPES = ("NEXT_THROW_DIRECTION", "MISMEASURE", "PORTAL_LINKING", "COMBINED_CERTAINTY")
+
     def _info_msg_h(msg):
         if msg.get("type") in _TWO_LINE_TYPES:
             return warn_text_h * 2 + 4 + 6
         return warn_text_h + 6
+
     info_row_h = warn_text_h + 6
     total_info_h = sum(_info_msg_h(m) for m in _display_info_messages)
     if _display_info_messages:
@@ -839,28 +874,29 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
     main_h += total_info_h
 
     num_throw_rows = max(len(throw_rows_data), 3)
-
     throw_h = 0
     if num_throw_rows:
         throw_h = HDR_SEP + hdr_h + small_h + HDR_SEP + num_throw_rows * (throw_body_h + ROW_SEP)
 
     img_h = main_h + throw_h
 
-    img  = Image.new("RGBA", (img_w, img_h), NB_ROW_BG)
+    # Create image with opacity-aware background
+    img  = Image.new("RGBA", (img_w, img_h), _NB_ROW_BG)
     draw = ImageDraw.Draw(img)
 
-    draw.rectangle([0, 0, img_w - 1, new_header_h - 1], fill=NEW_HEADER_BG)
+    # New header bar
+    draw.rectangle([0, 0, img_w - 1, new_header_h - 1], fill=_NEW_HEADER_BG)
     nh_text_x = CELL_PAD_MAIN + 4
     nh_text_y = (new_header_h - th(new_header_font)) // 2
-    draw.text((nh_text_x, nh_text_y), "NBTrackr", font=new_header_font, fill=NB_TEXT)
-    ver_x = nh_text_x + tw("NBTrackr", new_header_font) + 8
+    draw.text((nh_text_x, nh_text_y), "NBTrackr", font=new_header_font, fill=_NB_TEXT)
+    ver_x  = nh_text_x + tw("NBTrackr", new_header_font) + 8
     a_title, d_title = new_header_font.getmetrics()
     a_ver, d_ver = new_header_ver_font.getmetrics()
 
     title_baseline = nh_text_y + a_title
     ver_y = title_baseline - a_ver
     try:
-        draw.text((ver_x, ver_y), APP_VERSION, font=new_header_ver_font, fill=NEW_HEADER_VER_FG)
+        draw.text((ver_x, ver_y), APP_VERSION, font=new_header_ver_font, fill=_NEW_HDR_VER_FG)
     except Exception:
         pass
 
@@ -888,8 +924,8 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
     top_header_y0 = new_header_bottom
     top_header_y1 = top_header_y0 + hdr_h - 1
     if not (blind_result is not None or failed):
-        draw.rectangle([0, top_header_y0, img_w - 1, top_header_y0 + HDR_SEP - 1], fill=NB_HDR_SEP)
-        draw.rectangle([0, top_header_y0 + HDR_SEP, img_w - 1, top_header_y1 + HDR_SEP], fill=NB_HEADER_BG)
+        draw.rectangle([0, top_header_y0, img_w - 1, top_header_y0 + HDR_SEP - 1], fill=_NB_HDR_SEP)
+        draw.rectangle([0, top_header_y0 + HDR_SEP, img_w - 1, top_header_y1 + HDR_SEP], fill=_NB_HEADER_BG)
         x = 0
         for key in col_keys:
             cw  = col_widths[key]
@@ -906,25 +942,25 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
             else:
                 text_x = x + (cw - lw) // 2
             draw.text((text_x, top_header_y0 + HDR_SEP + (hdr_h - th(hdr_font)) // 2),
-                                lbl, font=hdr_font, fill=NB_TEXT)
+                      lbl, font=hdr_font, fill=_NB_TEXT)
             x += cw
-
-        draw.rectangle([0, top_header_y1 + HDR_SEP + 1, img_w - 1, top_header_y1 + HDR_SEP + 1 + HDR_SEP - 1], fill=NB_HDR_SEP)
+        draw.rectangle([0, top_header_y1 + HDR_SEP + 1, img_w - 1,
+                        top_header_y1 + HDR_SEP + 1 + HDR_SEP - 1], fill=_NB_HDR_SEP)
 
     row_area_y = new_header_bottom + HDR_SEP + hdr_h + HDR_SEP
 
     for row_idx in range(num_display_rows):
         row_slot = body_h + (ROW_SEP if not hide_row_dividers else 0)
         y = row_area_y + row_idx * row_slot
-        if (not hide_row_dividers and row_idx < num_display_rows - 1) or (show_portal_warning and row_idx == num_display_rows - 1):
-            draw.rectangle([0, y + body_h, img_w - 1, y + body_h + ROW_SEP - 1],
-                           fill=NB_ROW_SEP)
+        if (not hide_row_dividers and row_idx < num_display_rows - 1) or \
+                (show_portal_warning and row_idx == num_display_rows - 1):
+            draw.rectangle([0, y + body_h, img_w - 1, y + body_h + ROW_SEP - 1], fill=_NB_ROW_SEP)
 
         a_body, d_body = body_font.getmetrics()
         text_y = y + (body_h - (a_body + d_body)) // 2
         x = 0
 
-        def draw_cell_centered(key, text, fill=NB_TEXT, fnt=body_font):
+        def draw_cell_centered(key, text, fill=_NB_TEXT, fnt=body_font):
             nonlocal x
             cw  = col_widths[key]
             tw_ = dummy_draw.textbbox((0, 0), text, font=fnt)[2]
@@ -933,14 +969,14 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
 
         def draw_coord_cell(key, coord_pair):
             nonlocal x
-            cw     = col_widths[key]
+            cw      = col_widths[key]
             cx_v, cz_v = coord_pair
-            parts  = [
-                ("(", NB_TEXT),
-                (str(cx_v), neg_coords_rgb if neg_coords_enabled and cx_v < 0 else NB_TEXT),
-                (", ", NB_TEXT),
-                (str(cz_v), neg_coords_rgb if neg_coords_enabled and cz_v < 0 else NB_TEXT),
-                (")", NB_TEXT),
+            parts   = [
+                ("(", _NB_TEXT),
+                (str(cx_v), _tc(neg_coords_rgb) if neg_coords_enabled and cx_v < 0 else _NB_TEXT),
+                (", ", _NB_TEXT),
+                (str(cz_v), _tc(neg_coords_rgb) if neg_coords_enabled and cz_v < 0 else _NB_TEXT),
+                (")", _NB_TEXT),
             ]
             full_w = sum(tw(p[0]) for p in parts)
             bx = x + (cw - full_w) // 2
@@ -956,11 +992,10 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
         else:
             r = rows[row_idx]
             x = 0
-
             draw_coord_cell("loc", r['loc'])
-
             cert_txt = f"{r['cert_pct']:.1f}%"
-            draw_cell_centered("cert", cert_txt, fill=certainty_color(r['cert_pct']))
+            draw_cell_centered("cert", cert_txt,
+                               fill=_tc_dyn(certainty_color(r['cert_pct'])))
             draw_cell_centered("dist", str(r['dist']))
             draw_coord_cell("nether", r['nether'])
 
@@ -968,20 +1003,22 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                 cw       = col_widths["angle"]
                 base_str = r['angle']
                 dir_part = ""
-                dir_col  = NB_TEXT
+                dir_col  = _NB_TEXT
                 if r['dir'] is not None:
                     arrow    = "->" if r['dir'] > 0 else "<-"
                     dir_part = f" ({arrow} {abs(r['dir']):.1f})"
-                    dir_col  = gradient_color(abs(r['dir']))
+                    dir_col  = _tc_dyn(gradient_color(abs(r['dir'])))
                 full_w = tw(base_str) + tw(dir_part)
-                bx = x + (cw - full_w) // 2
-                draw.text((bx, text_y), base_str, font=body_font, fill=NB_TEXT)
+                bx     = x + (cw - full_w) // 2
+                draw.text((bx, text_y), base_str, font=body_font, fill=_NB_TEXT)
                 if dir_part:
                     draw.text((bx + tw(base_str), text_y), dir_part, font=body_font, fill=dir_col)
                 x += cw
 
+    # Info messages
     if _display_info_messages:
         info_area_start_y = row_area_y + num_display_rows * _row_slot
+
         def _split_two_lines(msg_type, text):
             if msg_type == "NEXT_THROW_DIRECTION":
                 marker = "after next"
@@ -1024,26 +1061,23 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                         return line1, line2
                 return text, None
             return text, None
+
         current_info_y = info_area_start_y
-        draw.rectangle(
-            [0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1],
-            fill=NB_ROW_SEP
-        )
+        draw.rectangle([0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1], fill=_NB_ROW_SEP)
         current_info_y += ROW_SEP
         for msg_idx, msg in enumerate(_display_info_messages):
-            severity = msg.get("severity", "WARNING")
-            msg_type = msg.get("type", "")
-            text     = _strip_html(msg.get("message", ""))
-            text_h   = th(portal_warn_font)
-            icon_size = int(text_h * 1.1)
-            this_msg_h = _info_msg_h(msg)
-            row_y = current_info_y
+            severity    = msg.get("severity", "WARNING")
+            msg_type    = msg.get("type", "")
+            text        = _strip_html(msg.get("message", ""))
+            text_h      = th(portal_warn_font)
+            icon_size   = int(text_h * 1.1)
+            this_msg_h  = _info_msg_h(msg)
+            row_y       = current_info_y
 
             if severity == "INFO":
                 icon_file = "info_icon.png"
             else:
                 icon_file = "warning_icon.png"
-
             icon_path = os.path.join(_get_assets_dir(), icon_file)
             try:
                 with Image.open(icon_path) as icon_img:
@@ -1057,126 +1091,116 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
             if msg_type in _TWO_LINE_TYPES:
                 line1, line2 = _split_two_lines(msg_type, text)
                 if line2:
-                    line_gap = 4
-                    total_text_h = text_h * 2 + line_gap
-                    text_y1 = row_y + (this_msg_h - total_text_h) // 2
-                    text_y2 = text_y1 + text_h + line_gap
+                    line_gap      = 4
+                    total_text_h  = text_h * 2 + line_gap
+                    text_y1       = row_y + (this_msg_h - total_text_h) // 2
+                    text_y2       = text_y1 + text_h + line_gap
                     if msg_type == "COMBINED_CERTAINTY":
                         pct_match = re.search(r'(\d+\.?\d*%)', line1)
                         if pct_match:
-                            before = line1[:pct_match.start()]
-                            pct_str = pct_match.group(1)
-                            after = line1[pct_match.end():]
+                            before    = line1[:pct_match.start()]
+                            pct_str   = pct_match.group(1)
+                            after     = line1[pct_match.end():]
                             try:
-                                pct_val = float(pct_str.rstrip('%'))
-                                pct_color = _nb_certainty_color(pct_val)
+                                pct_val   = float(pct_str.rstrip('%'))
+                                pct_color = _tc_dyn(_nb_certainty_color(pct_val))
                             except Exception:
-                                pct_color = portal_warn_color
+                                pct_color = _PORTAL_WARN_COLOR
                             bx = text_start_x
-                            draw.text((bx, text_y1), before, font=portal_warn_font, fill=portal_warn_color)
+                            draw.text((bx, text_y1), before, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
                             bx += tw(before, portal_warn_font)
                             draw.text((bx, text_y1), pct_str, font=portal_warn_font, fill=pct_color)
                             bx += tw(pct_str, portal_warn_font)
-                            draw.text((bx, text_y1), after, font=portal_warn_font, fill=portal_warn_color)
+                            draw.text((bx, text_y1), after, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
                         else:
-                            draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=portal_warn_color)
-                        draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=portal_warn_color)
+                            draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
+                        draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
                     else:
-                        draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=portal_warn_color)
-                        draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=portal_warn_color)
+                        draw.text((text_start_x, text_y1), line1, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
+                        draw.text((text_start_x, text_y2), line2, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
                 else:
-                    text_y = row_y + (this_msg_h - text_h) // 2
-                    draw.text((text_start_x, text_y), line1, font=portal_warn_font, fill=portal_warn_color)
+                    ty = row_y + (this_msg_h - text_h) // 2
+                    draw.text((text_start_x, ty), line1, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
             else:
-                text_y = row_y + (this_msg_h - text_h) // 2
-                draw.text((text_start_x, text_y), text, font=portal_warn_font, fill=portal_warn_color)
+                ty = row_y + (this_msg_h - text_h) // 2
+                draw.text((text_start_x, ty), text, font=portal_warn_font, fill=_PORTAL_WARN_COLOR)
 
             current_info_y += this_msg_h
-
             if msg_idx < len(_display_info_messages) - 1:
-                draw.rectangle(
-                    [0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1],
-                    fill=NB_ROW_SEP
-                )
+                draw.rectangle([0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1], fill=_NB_ROW_SEP)
                 current_info_y += ROW_SEP
 
     if blind_result is not None:
-        eval_color  = blind_evaluation_color(evaluation)
+        eval_color = _tc_dyn(blind_evaluation_color(evaluation))
         txt_x  = CELL_PAD_MAIN
         txt_y  = new_header_bottom + (body_h - th(body_font)) // 2
         lsep   = body_h
-        draw.text((txt_x, txt_y),          _prefix,   font=body_font, fill=NB_TEXT)
+        draw.text((txt_x, txt_y), _prefix, font=body_font, fill=_NB_TEXT)
         draw.text((txt_x + tw(_prefix), txt_y), _eval_text, font=body_font, fill=eval_color)
-        draw.text((txt_x, txt_y + lsep),   _l2p,      font=body_font, fill=eval_color)
-        draw.text((txt_x + tw(_l2p), txt_y + lsep), _l2s, font=body_font, fill=NB_TEXT)
-        draw.text((txt_x, txt_y + lsep * 2), _l3,     font=body_font, fill=NB_TEXT)
+        draw.text((txt_x, txt_y + lsep), _l2p, font=body_font, fill=eval_color)
+        draw.text((txt_x + tw(_l2p), txt_y + lsep), _l2s, font=body_font, fill=_NB_TEXT)
+        draw.text((txt_x, txt_y + lsep * 2), _l3, font=body_font, fill=_NB_TEXT)
     elif failed:
         txt_x = CELL_PAD_MAIN
         for li, line in enumerate(_fl):
             if not line:
                 continue
-            txt_y = new_header_bottom + li * body_h + (body_h - th(body_font)) // 2
-            draw.text((txt_x, txt_y), line, font=body_font, fill=NB_TEXT)
+            ty = new_header_bottom + li * body_h + (body_h - th(body_font)) // 2
+            draw.text((txt_x, ty), line, font=body_font, fill=_NB_TEXT)
 
     if num_throw_rows:
         throw_base_y = main_h
-
-        draw.rectangle([0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP - 1],
-                       fill=NB_HDR_SEP)
-
-        throw_title_h = hdr_h
+        draw.rectangle([0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP - 1], fill=_NB_HDR_SEP)
         th_title_y = throw_base_y + HDR_SEP
-        draw.rectangle([0, th_title_y, img_w - 1, th_title_y + throw_title_h - 1], fill=NB_HEADER_BG)
-        title_ty = th_title_y + (throw_title_h - th(hdr_font)) // 2
-        draw.text((CELL_PAD_MAIN + 6, title_ty), "Ender eye throws", font=hdr_font, fill=NB_TEXT)
+        draw.rectangle([0, th_title_y, img_w - 1, th_title_y + hdr_h - 1], fill=_NB_HEADER_BG)
+        title_ty = th_title_y + (hdr_h - th(hdr_font)) // 2
+        draw.text((CELL_PAD_MAIN + 6, title_ty), "Ender eye throws", font=hdr_font, fill=_NB_TEXT)
 
-        th_hdr_y = th_title_y + throw_title_h
-        draw.rectangle([0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=NB_HEADER_BG)
+        th_hdr_y = th_title_y + hdr_h
+        draw.rectangle([0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=_NB_HEADER_BG)
         x = 0
         for i, thdr in enumerate(throw_headers):
-            cw = throw_col_widths[i]
-            lw = tw(thdr, small_font)
+            cw  = throw_col_widths[i]
+            lw  = tw(thdr, small_font)
             ty = th_hdr_y + (small_h - th(small_font)) // 2
-            draw.text((x + (cw - lw) // 2, ty), thdr, font=small_font, fill=NB_TEXT)
+            draw.text((x + (cw - lw) // 2, ty), thdr, font=small_font, fill=_NB_TEXT)
             x += cw
 
         sep2_y = th_hdr_y + small_h
-        draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP - 1], fill=NB_HDR_SEP)
+        draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP - 1], fill=_NB_HDR_SEP)
 
         for ti in range(num_throw_rows):
             ty = sep2_y + HDR_SEP + ti * (throw_body_h + ROW_SEP)
-
             if ti < num_throw_rows - 1:
                 draw.rectangle([0, ty + throw_body_h, img_w - 1, ty + throw_body_h + ROW_SEP - 1],
-                               fill=NB_ROW_SEP)
-
+                               fill=_NB_ROW_SEP)
             x = 0
             if ti < len(throw_rows_data):
                 trow = throw_rows_data[ti]
                 for i, cell in enumerate(trow):
-                    cw  = throw_col_widths[i]
+                    cw       = throw_col_widths[i]
                     a_small, _ = small_font.getmetrics()
                     ty2 = ty + (throw_body_h - a_small) // 2
-
                     if failed and i == 3:
                         x += cw
                         continue
-
                     if i == 2 and show_adj_count and ti in adj_count_by_throw:
                         aw_str, cnt_str, cnt_raw = adj_count_by_throw[ti]
                         if cnt_str:
-                            adj_col  = ADJ_COUNT_POSITIVE if (cnt_raw is None or cnt_raw >= 0) else ADJ_COUNT_NEGATIVE
-                            full_w   = tw(aw_str, small_font) + tw(cnt_str, small_font)
-                            bx       = x + (cw - full_w) // 2
-                            draw.text((bx, ty2), aw_str, font=small_font, fill=NB_THROW_HEADER_FG)
-                            draw.text((bx + tw(aw_str, small_font),  ty2), cnt_str, font=small_font, fill=adj_col)
+                            adj_col = _tc_dyn(ADJ_COUNT_POSITIVE if (cnt_raw is None or cnt_raw >= 0) else ADJ_COUNT_NEGATIVE)
+                            full_w  = tw(aw_str, small_font) + tw(cnt_str, small_font)
+                            bx      = x + (cw - full_w) // 2
+                            draw.text((bx, ty2), aw_str, font=small_font, fill=_NB_THROW_HDR_FG)
+                            draw.text((bx + tw(aw_str, small_font), ty2), cnt_str,
+                                      font=small_font, fill=adj_col)
                         else:
                             cw_ = tw(aw_str, small_font)
-                            draw.text((x + (cw - cw_) // 2, ty2), aw_str, font=small_font, fill=NB_THROW_HEADER_FG)
-                    
+                            draw.text((x + (cw - cw_) // 2, ty2), aw_str,
+                                      font=small_font, fill=_NB_THROW_HDR_FG)
                     else:
                         cw_ = tw(cell, small_font)
-                        draw.text((x + (cw - cw_) // 2, ty2), cell, font=small_font, fill=NB_THROW_HEADER_FG)
+                        draw.text((x + (cw - cw_) // 2, ty2), cell,
+                                  font=small_font, fill=_NB_THROW_HDR_FG)
                     x += cw
             else:
                 for cw in throw_col_widths:
@@ -1188,7 +1212,7 @@ def certainty_color_for_turn(abs_turn):
     return gradient_color(abs_turn)
 
 
-def _render_nb_failed_standalone(font_size):
+def _render_nb_failed_standalone(font_size, bg_opacity=1.0, text_opacity=1.0):
     font = _load_nb_font(font_size)
     a, d = font.getmetrics()
     body_h = a + d + 10
@@ -1198,17 +1222,17 @@ def _render_nb_failed_standalone(font_size):
         "Could not determine the stronghold chunk.",
         "You probably misread one of the eyes.",
     ]
-    max_w = max(dummy_draw.textbbox((0, 0), l, font=font)[2] for l in lines)
-    PAD  = 20
-    img_w = max_w + PAD * 2
-    img_h = body_h * len(lines) + PAD
-    img  = Image.new("RGBA", (img_w, img_h), NB_ROW_BG)
-    draw = ImageDraw.Draw(img)
+    max_w  = max(dummy_draw.textbbox((0, 0), l, font=font)[2] for l in lines)
+    PAD    = 20
+    img_w  = max_w + PAD * 2
+    img_h  = body_h * len(lines) + PAD
+    img    = Image.new("RGBA", (img_w, img_h), _with_alpha(NB_ROW_BG[:3], bg_opacity))
+    draw   = ImageDraw.Draw(img)
+    t_col  = _with_alpha(NB_TEXT, text_opacity)
     for i, line in enumerate(lines):
         y  = PAD // 2 + i * body_h
         lw = dummy_draw.textbbox((0, 0), line, font=font)[2]
-        draw.text(((img_w - lw) // 2, y + (body_h - (a + d)) // 2),
-                  line, font=font, fill=NB_TEXT)
+        draw.text(((img_w - lw) // 2, y + (body_h - (a + d)) // 2), line, font=font, fill=t_col)
     return img
 
 # --------------------- END Generate default pinned image overlay -----------
@@ -1235,14 +1259,14 @@ def generate_custom_pinned_image():
         log("Failed to read customizations:", e)
         return
 
-    bg_hex = custom.get("background_color", "#FFFFFF")
+    bg_hex   = custom.get("background_color", "#FFFFFF")
     text_hex = custom.get("text_color", "#000000")
-
-    bg_rgb = hex_to_rgb(bg_hex, fallback=(255, 255, 255))
+    bg_rgb   = hex_to_rgb(bg_hex, fallback=(255, 255, 255))
     text_rgb = hex_to_rgb(text_hex, fallback=(0, 0, 0))
-
-    bg_rgba = (bg_rgb[0], bg_rgb[1], bg_rgb[2], 255)
-
+    bg_opacity   = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
+    text_opacity = max(0.0, min(1.0, float(custom.get("text_opacity", 1.0))))
+    bg_rgba    = (bg_rgb[0], bg_rgb[1], bg_rgb[2], int(bg_opacity * 255))
+    text_rgba  = (*text_rgb, int(text_opacity * 255))
     show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
     show_error_message = custom.get("show_error_message", False)
@@ -1250,7 +1274,7 @@ def generate_custom_pinned_image():
     boat_info_hide_after_setting = float(custom.get("boat_info_hide_after", 10))
     show_blind_info    = custom.get("show_blind_info", True)
     blind_hide_after   = custom.get("blind_info_hide_after", 20)
-    blind_hide_after_enabled  = custom.get("blind_info_hide_after_enabled", False)
+    blind_hide_after_enabled = custom.get("blind_info_hide_after_enabled", False)
     font_size          = custom.get("font_size", 18)
     show_adj_count     = custom.get("show_angle_adjustment_count", False)
     ow_coords_format   = custom.get("overworld_coords_format", "four_four")
@@ -1258,11 +1282,11 @@ def generate_custom_pinned_image():
     neg_coords_hex     = custom.get("negative_coords_color", "#CC6E72")
     neg_coords_rgb     = hex_to_rgb(neg_coords_hex, fallback=(204, 110, 114))
     portal_nether_enabled = custom.get("portal_nether_color_enabled", True)
-    portal_nether_hex     = custom.get("portal_nether_color", "#FFA500")
-    portal_nether_rgb     = hex_to_rgb(portal_nether_hex, fallback=(255, 165, 0))
-    show_angle_error    = custom.get("show_angle_error", False)
-    angle_display_mode  = custom.get("angle_display_mode", "angle_and_change")
-    show_overlay_header = custom.get("show_overlay_header", False)
+    portal_nether_hex  = custom.get("portal_nether_color", "#FFA500")
+    portal_nether_rgb  = hex_to_rgb(portal_nether_hex, fallback=(255, 165, 0))
+    show_angle_error   = custom.get("show_angle_error", False)
+    angle_display_mode = custom.get("angle_display_mode", "angle_and_change")
+    show_overlay_header= custom.get("show_overlay_header", False)
 
     with status_lock:
         boat_resp       = dict(status["boat_resp"])
@@ -1274,13 +1298,11 @@ def generate_custom_pinned_image():
         _schedule(clear_overlay_image)
         return
 
-    boat_state  = boat_resp.get("boatState")
-    boat_angle  = boat_resp.get("boatAngle", None)
-
-    result_type = stronghold_resp.get("resultType")
-
+    boat_state    = boat_resp.get("boatState")
+    boat_angle    = boat_resp.get("boatAngle", None)
+    result_type   = stronghold_resp.get("resultType")
     blind_enabled = blind_resp.get("isBlindModeEnabled", False)
-    blind_result = blind_resp.get("blindResult", {})
+    blind_result  = blind_resp.get("blindResult", {})
     info_messages = info_resp.get("informationMessages", [])
 
     now = time.time()
@@ -1291,7 +1313,7 @@ def generate_custom_pinned_image():
         blind_was_showing = status.get("blindCurrentlyShowing", False)
 
     should_show_blind = (show_blind_info and blind_enabled and has_valid_blind_result and
-                        result_type in ("NONE", "BLIND"))
+                         result_type in ("NONE", "BLIND"))
 
     if blind_was_showing:
         should_hide = False
@@ -1316,7 +1338,7 @@ def generate_custom_pinned_image():
 
     if should_show_blind:
         with status_lock:
-            blind_show_until = status["blindShowUntil"]
+            blind_show_until        = status["blindShowUntil"]
             blind_currently_showing = status.get("blindCurrentlyShowing", False)
 
             if blind_show_until > 0 and not blind_currently_showing:
@@ -1338,7 +1360,9 @@ def generate_custom_pinned_image():
                 blind_result.get("improveDistance"),
                 font_size,
                 bg_hex,
-                text_hex
+                text_hex,
+                bg_opacity,
+                text_opacity,
             )
 
             if blind_currently_showing and blind_cache_key == _last_blind:
@@ -1346,24 +1370,21 @@ def generate_custom_pinned_image():
 
             _last_blind = blind_cache_key
 
-            evaluation = blind_result.get("evaluation", "")
-            x_nether = blind_result.get("xInNether", 0)
-            z_nether = blind_result.get("zInNether", 0)
-            highroll_prob = blind_result.get("highrollProbability", 0) * 100
+            evaluation      = blind_result.get("evaluation", "")
+            x_nether        = blind_result.get("xInNether", 0)
+            z_nether        = blind_result.get("zInNether", 0)
+            highroll_prob   = blind_result.get("highrollProbability", 0) * 100
             highroll_thresh = blind_result.get("highrollThreshold", 400)
-            improve_dir = blind_result.get("improveDirection", 0)
-            improve_dist = blind_result.get("improveDistance", 0)
+            improve_dir     = blind_result.get("improveDirection", 0)
+            improve_dist    = blind_result.get("improveDistance", 0)
 
-            eval_text = format_blind_evaluation(evaluation)
-
-            line1_pre = f"Blind coords ({round(x_nether)}, {round(z_nether)}) are "
-            line1_eval = eval_text
-
+            eval_text       = format_blind_evaluation(evaluation)
+            line1_pre       = f"Blind coords ({round(x_nether)}, {round(z_nether)}) are "
+            line1_eval      = eval_text
             highroll_pct_text = f"{highroll_prob:.1f}%"
-            line2_post = f" chance of <{int(highroll_thresh)} block blind"
-
-            improve_deg = math.degrees(improve_dir)
-            line3 = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
+            line2_post      = f" chance of <{int(highroll_thresh)} block blind"
+            improve_deg     = math.degrees(improve_dir)
+            line3           = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
 
             font_name = custom.get("font_name", "")
             font = None
@@ -1379,47 +1400,31 @@ def generate_custom_pinned_image():
                 except Exception:
                     font = ImageFont.load_default()
 
-            dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
-
-            bbox_line1_pre = dummy.textbbox((0,0), line1_pre, font=font)
-            bbox_line1_eval = dummy.textbbox((0,0), line1_eval, font=font)
-            w_line1_pre = bbox_line1_pre[2] - bbox_line1_pre[0]
-            w_line1_eval = bbox_line1_eval[2] - bbox_line1_eval[0]
-
-            bbox_line2_pct = dummy.textbbox((0,0), highroll_pct_text, font=font)
-            bbox_line2_post = dummy.textbbox((0,0), line2_post, font=font)
-            w_line2_pct = bbox_line2_pct[2] - bbox_line2_pct[0]
-            w_line2_post = bbox_line2_post[2] - bbox_line2_post[0]
-
-            bbox_line3 = dummy.textbbox((0,0), line3, font=font)
-            w_line3 = bbox_line3[2] - bbox_line3[0]
-
-            max_w = max(w_line1_pre + w_line1_eval, w_line2_pct + w_line2_post, w_line3)
+            dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+            w_line1_pre  = dummy.textbbox((0, 0), line1_pre,  font=font)[2]
+            w_line1_eval = dummy.textbbox((0, 0), line1_eval, font=font)[2]
+            w_line2_pct  = dummy.textbbox((0, 0), highroll_pct_text, font=font)[2]
+            w_line2_post = dummy.textbbox((0, 0), line2_post, font=font)[2]
+            w_line3      = dummy.textbbox((0, 0), line3,      font=font)[2]
+            max_w        = max(w_line1_pre + w_line1_eval, w_line2_pct + w_line2_post, w_line3)
 
             ascent, descent = font.getmetrics()
-            line_h = ascent + descent + 6
-            height = line_h * 3 + 20
+            line_h  = ascent + descent + 6
+            height  = line_h * 3 + 20
+            pad     = 10
 
-            pad = 10
-            img = Image.new("RGBA", (int(max_w + 2*pad), height), bg_rgba)
+            img  = Image.new("RGBA", (int(max_w + 2 * pad), height), bg_rgba)
             draw = ImageDraw.Draw(img)
+            eval_color_rgba = (*blind_evaluation_color(evaluation), int(text_opacity * 255))
 
-            eval_color = blind_evaluation_color(evaluation)
-
-            x = pad
-            y = 10
-            draw.text((x, y), line1_pre, font=font, fill=text_rgb)
-            x += w_line1_pre
-            draw.text((x, y), line1_eval, font=font, fill=eval_color)
-
-            x = pad
+            x, y = pad, 10
+            draw.text((x, y), line1_pre, font=font, fill=text_rgba)
+            draw.text((x + w_line1_pre, y), line1_eval, font=font, fill=eval_color_rgba)
+            x = pad; y += line_h
+            draw.text((x, y), highroll_pct_text, font=font, fill=eval_color_rgba)
+            draw.text((x + w_line2_pct, y), line2_post, font=font, fill=text_rgba)
             y += line_h
-            draw.text((x, y), highroll_pct_text, font=font, fill=eval_color)
-            x += w_line2_pct
-            draw.text((x, y), line2_post, font=font, fill=text_rgb)
-
-            y += line_h
-            draw.text((pad, y), line3, font=font, fill=text_rgb)
+            draw.text((pad, y), line3, font=font, fill=text_rgba)
 
             try:
                 img.save(IMAGE_PATH)
@@ -1442,12 +1447,9 @@ def generate_custom_pinned_image():
     if show_error_message and result_type == "FAILED":
         _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
         _cached_customizations = custom
-
-        text = "Could not determine the stronghold chunk."
+        text      = "Could not determine the stronghold chunk."
         font_name = custom.get("font_name", "")
-
-        font_size = custom.get("font_size", 18)
-        font = None
+        font      = None
         if font_name:
             try:
                 font = ImageFont.truetype(font_name, font_size)
@@ -1460,19 +1462,16 @@ def generate_custom_pinned_image():
             except Exception:
                 font = ImageFont.load_default()
 
-        dummy = ImageDraw.Draw(Image.new("RGBA",(1,1)))
-        bbox = dummy.textbbox((0,0), text, font=font)
-        text_w  = bbox[2] - bbox[0]
-        text_h  = bbox[3] - bbox[1]
+        dummy    = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bbox     = dummy.textbbox((0, 0), text, font=font)
+        text_w   = bbox[2] - bbox[0]
+        text_h   = bbox[3] - bbox[1]
         offset_x = bbox[0]
         offset_y = bbox[1]
-
-        pad = 10
-
-        img = Image.new("RGBA", (text_w+2*pad, text_h+2*pad), bg_rgba)
-        draw = ImageDraw.Draw(img)
-        draw.text((pad - offset_x, pad - offset_y), text, font=font, fill=text_rgb)
-
+        pad      = 10
+        img      = Image.new("RGBA", (text_w + 2 * pad, text_h + 2 * pad), bg_rgba)
+        draw     = ImageDraw.Draw(img)
+        draw.text((pad - offset_x, pad - offset_y), text, font=font, fill=text_rgba)
         try:
             img.save(IMAGE_PATH)
         except Exception as e:
@@ -1483,7 +1482,6 @@ def generate_custom_pinned_image():
     with status_lock:
         last_shown = status["lastShown"]
         show_until = status["showUntil"]
-    now = time.time()
 
     if show_boat_icon and result_type == "NONE":
         if boat_state == "VALID" and boat_angle == 0:
@@ -1540,19 +1538,18 @@ def generate_custom_pinned_image():
     shown_count  = custom.get("shown_measurements", 5)
     order        = custom.get("text_order", [])
     enabled      = custom.get("text_enabled", {})
-    show_dir     = custom.get("show_angle_direction", True)
     text_header  = custom.get("text_header", {})
     HEADER_LABELS = {
-        "distance": "Dist.",
-        "certainty_percentage": "%",
-        "angle": "Angle",
-        "overworld_coords": "Chunk" if ow_coords_format == "chunk" else "Location",
-        "nether_coords": "Nether",
+        "distance":            "Dist.",
+        "certainty_percentage":"%",
+        "angle":               "Angle",
+        "overworld_coords":    "Chunk" if ow_coords_format == "chunk" else "Location",
+        "nether_coords":       "Nether",
     }
 
     lines = []
-    adj_count_overlays = []
-    angle_error_overlays = []
+    adj_count_overlays  = []
+    angle_error_overlays= []
 
     _portal_link_flags = []
     if portal_nether_enabled and eye_throws:
@@ -1560,10 +1557,8 @@ def generate_custom_pinned_image():
         _approx_nx = (_ft.get("xInOverworld") or 0.0) / 8.0
         _approx_nz = (_ft.get("zInOverworld") or 0.0) / 8.0
         for pred in preds[:shown_count]:
-            cx = pred.get("chunkX", 0)
-            cz = pred.get("chunkZ", 0)
-            _best_nx = cx * 16 / 8.0 + 0.5
-            _best_nz = cz * 16 / 8.0 + 0.5
+            cx = pred.get("chunkX", 0); cz = pred.get("chunkZ", 0)
+            _best_nx = cx * 16 / 8.0 + 0.5; _best_nz = cz * 16 / 8.0 + 0.5
             _max_axis = max(abs(_approx_nx - _best_nx), abs(_approx_nz - _best_nz))
             _portal_link_flags.append(_max_axis < 24)
     else:
@@ -1582,7 +1577,7 @@ def generate_custom_pinned_image():
                 continue
 
             if key == "distance":
-                d = dist/8 if in_nether else dist
+                d = dist / 8 if in_nether else dist
                 parts.append(("distance", (str(int(d)), d)))
 
             elif key == "certainty_percentage":
@@ -1590,58 +1585,44 @@ def generate_custom_pinned_image():
                 parts.append(("certainty", f"{pct}%"))
 
             elif key == "angle" and None not in (h_ang, player_x, player_z):
-                sx = cx*16 + 4
-                sz = cz*16 + 4
-
+                sx = cx * 16 + 4; sz = cz * 16 + 4
                 if in_nether:
-                    sx /= 8.0
-                    sz /= 8.0
-                    p_x = player_x / 8.0
-                    p_z = player_z / 8.0
+                    sx /= 8.0; sz /= 8.0
+                    p_x = player_x / 8.0; p_z = player_z / 8.0
                 else:
-                    p_x = player_x
-                    p_z = player_z
-
-                dx = sx - p_x
-                dz = sz - p_z
+                    p_x = player_x; p_z = player_z
+                dx = sx - p_x; dz = sz - p_z
                 tgt    = (math.degrees(math.atan2(dz, dx)) + 270) % 360
                 signed = ((tgt + 180) % 360) - 180
                 turn   = ((tgt - (h_ang % 360) + 180) % 360) - 180
-
                 show_ang    = angle_display_mode in ("angle_and_change", "angle_only")
                 show_change = angle_display_mode in ("angle_and_change", "change_only")
-
                 if show_ang:
                     parts.append(("text", f"{signed:.2f}"))
-
                 if show_change:
                     arrow = "->" if turn > 0 else "<-"
                     parts.append(("angle_change", (arrow, f"{abs(turn):.1f}")))
-
             elif key == "overworld_coords":
                 if ow_coords_format == "chunk":
                     ox, oz = cx, cz
                 elif ow_coords_format == "eight_eight":
-                    ox, oz = cx*16+8, cz*16+8
+                    ox, oz = cx * 16 + 8, cz * 16 + 8
                 else:
-                    ox, oz = cx*16+4, cz*16+4
+                    ox, oz = cx * 16 + 4, cz * 16 + 4
                 if show_coords_by_dim and in_nether:
-                    ox, oz = round(ox/8), round(oz/8)
+                    ox, oz = round(ox / 8), round(oz / 8)
                 parts.append(("coords", (ox, oz)))
-
             elif key == "nether_coords":
-                nx, nz = cx*16+4, cz*16+4
+                nx, nz = cx * 16 + 4, cz * 16 + 4
                 if not (show_coords_by_dim and not in_nether):
-                    nx, nz = round(nx/8), round(nz/8)
+                    nx, nz = round(nx / 8), round(nz / 8)
                 parts.append(("nether_coords_val", (nx, nz)))
-
         if parts:
             _flag = _portal_link_flags[pred_idx] if pred_idx < len(_portal_link_flags) else False
             lines.append((parts, _flag))
 
-    adj_count_overlays = []
-    angle_error_overlays = []
-
+    adj_count_overlays  = []
+    angle_error_overlays= []
     if eye_throws:
         for throw_idx, throw in enumerate(eye_throws):
             if show_adj_count:
@@ -1653,8 +1634,6 @@ def generate_custom_pinned_image():
                     adj_count_overlays.append((f"{angle_without:.2f}", f"{sign}{increments}", increments))
                 else:
                     adj_count_overlays.append((f"{angle_without:.2f}", None, None))
-                    log("Throw", throw_idx, "adj count: zero -> will display angleWithoutCorrection only")
-
             if show_angle_error:
                 error_val = throw.get("error", None)
                 if error_val is not None:
@@ -1669,8 +1648,7 @@ def generate_custom_pinned_image():
             return
 
     font_name = custom.get("font_name", "")
-    font_size = custom.get("font_size", 18)
-    font = None
+    font      = None
     if font_name:
         try:
             font = ImageFont.truetype(font_name, font_size)
@@ -1687,17 +1665,14 @@ def generate_custom_pinned_image():
     line_h = ascent + descent + 6
 
     has_header = any(text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True))
-    header_h = line_h if has_header else 0
+    header_h   = line_h if has_header else 0
 
-    max_w  = 0
     n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays))
-
     small_font_size = max(8, int(font_size * 0.90))
-    small_font_name = custom.get("font_name", "")
     small_font = None
-    if small_font_name:
+    if font_name:
         try:
-            small_font = ImageFont.truetype(small_font_name, small_font_size)
+            small_font = ImageFont.truetype(font_name, small_font_size)
         except Exception:
             pass
     if small_font is None:
@@ -1718,21 +1693,17 @@ def generate_custom_pinned_image():
 
     def _item_display_width(kind, val):
         if kind == "distance":
-            try:
-                txt, _ = val
-            except Exception:
-                txt = str(val)
+            txt = val[0] if isinstance(val, tuple) else str(val)
         elif kind in ("coords", "nether_coords_val"):
             cx_v, cz_v = val
             txt = f"({cx_v}, {cz_v})"
         elif kind == "angle_change":
-            arrow, num = val
+            arrow, num  = val
             full_change = f"({arrow} {num})"
             return dummy.textbbox((0, 0), full_change, font=font)[2] + 14, full_change
         else:
             txt = str(val)
-        gap = 14
-        return dummy.textbbox((0, 0), txt, font=font)[2] + gap, txt
+        return dummy.textbbox((0, 0), txt, font=font)[2] + 14, txt
 
     col_widths = []
     for parts, _plink in lines:
@@ -1744,7 +1715,6 @@ def generate_custom_pinned_image():
                 col_widths[slot_idx] = max(col_widths[slot_idx], w)
 
     required_w = 10 + sum(col_widths) + 10
-
     img  = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
     draw = ImageDraw.Draw(img)
 
@@ -1758,29 +1728,25 @@ def generate_custom_pinned_image():
 
     if has_header:
         visible_keys = [k for k in order if enabled.get(k, True)]
-        key_slots = {}
-        slot = 0
+        key_slots    = {}
+        slot         = 0
         for key in visible_keys:
             if key == "angle":
                 slots = []
                 if angle_display_mode in ("angle_and_change", "angle_only"):
-                    slots.append(slot)
-                    slot += 1
+                    slots.append(slot); slot += 1
                 if angle_display_mode in ("angle_and_change", "change_only"):
-                    slots.append(slot)
-                    slot += 1
+                    slots.append(slot); slot += 1
                 key_slots[key] = slots
             else:
-                key_slots[key] = [slot]
-                slot += 1
+                key_slots[key] = [slot]; slot += 1
         for key in visible_keys:
             if text_header.get(key, "Text") != "Text":
                 continue
             slots = key_slots.get(key, [])
             if not slots:
                 continue
-            first_slot = slots[0]
-            last_slot = slots[-1]
+            first_slot = slots[0]; last_slot = slots[-1]
             if first_slot >= len(col_x) or last_slot >= len(col_widths):
                 continue
             hdr_txt = HEADER_LABELS.get(key, "")
@@ -1790,23 +1756,17 @@ def generate_custom_pinned_image():
             if key == "angle" and angle_display_mode in ("angle_and_change",):
                 change_slot = slots[-1]
                 if change_slot < len(col_x) and change_slot < len(col_widths):
-                    span_start = col_x[change_slot]
-                    col_w_change = col_widths[change_slot]
-                    hx = span_start + (col_w_change - tw_val) // 2
+                    hx = col_x[change_slot] + (col_widths[change_slot] - tw_val) // 2
                 else:
-                    span_start = col_x[first_slot]
-                    col_w_first = col_widths[first_slot]
-                    hx = span_start + (col_w_first - tw_val) // 2
+                    hx = col_x[first_slot] + (col_widths[first_slot] - tw_val) // 2
             else:
                 span_start = col_x[first_slot]
-                span_end = col_x[last_slot] + col_widths[last_slot]
-                span_w = span_end - span_start
-                hx = span_start + (span_w - tw_val) // 2
-            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgb)
+                span_end   = col_x[last_slot] + col_widths[last_slot]
+                hx         = span_start + (span_end - span_start - tw_val) // 2
+            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgba)
 
     for row, (parts, _portal_link) in enumerate(lines):
         y = 5 + header_h + row * line_h
-
         for _item in parts:
             if _item[0] == "angle_change":
                 try:
@@ -1816,22 +1776,22 @@ def generate_custom_pinned_image():
                 break
 
         for slot_idx, item in enumerate(parts):
-            kind = item[0]
-            val  = item[1]
-            col_left  = col_x[slot_idx] if slot_idx < len(col_x) else 10
-            col_w     = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
+            kind     = item[0]
+            val      = item[1]
+            col_left = col_x[slot_idx] if slot_idx < len(col_x) else 10
+            col_w    = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
 
             def _cx(txt):
-                tw = draw.textbbox((0, 0), txt, font=font)[2]
-                return col_left + (col_w - tw) // 2
+                tw_v = draw.textbbox((0, 0), txt, font=font)[2]
+                return col_left + (col_w - tw_v) // 2
 
             if kind == "certainty":
                 txt = val
                 try:
-                    pct = float(txt.rstrip("%"))
-                    fill = certainty_color(pct)
+                    pct  = float(txt.rstrip("%"))
+                    fill = (*certainty_color(pct), int(text_opacity * 255))
                 except Exception:
-                    fill = text_rgb
+                    fill = text_rgba
                 draw.text((_cx(txt), y), txt, font=font, fill=fill)
 
             elif kind == "angle_change":
@@ -1840,169 +1800,117 @@ def generate_custom_pinned_image():
                     _last_turn_pct[0] = float(num)
                 except Exception:
                     pass
-                fill = gradient_color(_last_turn_pct[0])
+                fill        = (*gradient_color(_last_turn_pct[0]), int(text_opacity * 255))
                 full_change = f"({arrow} {num})"
-                cw_ = draw.textbbox((0, 0), full_change, font=font)[2]
-                col_start = col_left + (col_w - cw_) // 2
-                draw.text((col_start, y), full_change, font=font, fill=fill)
+                cw_         = draw.textbbox((0, 0), full_change, font=font)[2]
+                draw.text((col_left + (col_w - cw_) // 2, y), full_change, font=font, fill=fill)
 
             elif kind == "distance":
-                try:
-                    txt, dval = val
-                except Exception:
-                    txt = str(val)
-                    dval = None
-                draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
+                txt = val[0] if isinstance(val, tuple) else str(val)
+                draw.text((_cx(txt), y), txt, font=font, fill=text_rgba)
 
             elif kind == "coords":
                 cx_v, cz_v = val
-                x_str = str(cx_v)
-                z_str = str(cz_v)
-                x_fill = (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb)
-                z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
+                x_str = str(cx_v); z_str = str(cz_v)
+                x_fill = (*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cx_v < 0 else text_rgba
+                z_fill = (*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cz_v < 0 else text_rgba
                 full_txt = f"({cx_v}, {cz_v})"
                 bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                draw.text((bx, y), "(", font=font, fill=text_rgb)
-                bx += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((bx, y), x_str, font=font, fill=x_fill)
-                bx += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((bx, y), ", ", font=font, fill=text_rgb)
-                bx += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((bx, y), z_str, font=font, fill=z_fill)
-                bx += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((bx, y), ")", font=font, fill=text_rgb)
+                for part_txt, part_fill in [("(", text_rgba), (x_str, x_fill), (", ", text_rgba),
+                                             (z_str, z_fill), (")", text_rgba)]:
+                    draw.text((bx, y), part_txt, font=font, fill=part_fill)
+                    bx += draw.textbbox((0, 0), part_txt, font=font)[2]
 
             elif kind == "nether_coords_val":
                 cx_v, cz_v = val
-                x_str = str(cx_v)
-                z_str = str(cz_v)
-                _is_portal = portal_nether_enabled and _portal_link
-                punct_fill = portal_nether_rgb if _is_portal else text_rgb
-                x_fill = (portal_nether_rgb if _is_portal
-                          else (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb))
-                z_fill = (portal_nether_rgb if _is_portal
-                          else (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb))
+                x_str = str(cx_v); z_str = str(cz_v)
+                _is_portal  = portal_nether_enabled and _portal_link
+                punct_fill  = (*portal_nether_rgb, int(text_opacity * 255)) if _is_portal else text_rgba
+                x_fill = ((*portal_nether_rgb, int(text_opacity * 255)) if _is_portal
+                          else ((*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cx_v < 0
+                                else text_rgba))
+                z_fill = ((*portal_nether_rgb, int(text_opacity * 255)) if _is_portal
+                          else ((*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cz_v < 0
+                                else text_rgba))
                 full_txt = f"({cx_v}, {cz_v})"
                 bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                draw.text((bx, y), "(", font=font, fill=punct_fill)
-                bx += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((bx, y), x_str, font=font, fill=x_fill)
-                bx += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((bx, y), ", ", font=font, fill=punct_fill)
-                bx += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((bx, y), z_str, font=font, fill=z_fill)
-                bx += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((bx, y), ")", font=font, fill=punct_fill)
+                for part_txt, part_fill in [("(", punct_fill), (x_str, x_fill), (", ", punct_fill),
+                                             (z_str, z_fill), (")", punct_fill)]:
+                    draw.text((bx, y), part_txt, font=font, fill=part_fill)
+                    bx += draw.textbbox((0, 0), part_txt, font=font)[2]
 
             else:
                 txt = str(val)
-                draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
+                draw.text((_cx(txt), y), txt, font=font, fill=text_rgba)
 
-        max_w = max(max_w, rightmost_x)
-
-    actual_left = None
-    actual_right = None
+    actual_left = actual_right = None
     for parts, _plink_last in lines[-1:]:
         for slot_idx, item in enumerate(parts):
             kind, val = item[0], item[1]
             if slot_idx >= len(col_x) or slot_idx >= len(col_widths):
                 continue
-            c_left = col_x[slot_idx]
-            c_w = col_widths[slot_idx]
+            c_left = col_x[slot_idx]; c_w = col_widths[slot_idx]
             if kind == "distance":
-                try:
-                    txt, _ = val
-                except Exception:
-                    txt = str(val)
+                txt = val[0] if isinstance(val, tuple) else str(val)
             elif kind in ("coords", "nether_coords_val"):
                 cx_v, cz_v = val
                 txt = f"({cx_v}, {cz_v})"
             elif kind == "angle_change":
-                arrow, num = val
-                arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 4 + draw.textbbox((0, 0), num, font=font)[2]
-                centered_start = c_left + (c_w - total_w) // 2
-                centered_end = centered_start + total_w
-                if actual_left is None or centered_start < actual_left:
-                    actual_left = centered_start
-                if actual_right is None or centered_end > actual_right:
-                    actual_right = centered_end
+                arrow, num  = val
+                arrow_w     = draw.textbbox((0, 0), arrow, font=font)[2]
+                total_w     = arrow_w + 4 + draw.textbbox((0, 0), num, font=font)[2]
+                cs          = c_left + (c_w - total_w) // 2
+                ce          = cs + total_w
+                actual_left  = cs if actual_left is None else min(actual_left, cs)
+                actual_right = ce if actual_right is None else max(actual_right, ce)
                 continue
             else:
                 txt = str(val)
             txt_w = draw.textbbox((0, 0), txt, font=font)[2]
-            centered_start = c_left + (c_w - txt_w) // 2
-            centered_end = centered_start + txt_w
-            if actual_left is None or centered_start < actual_left:
-                actual_left = centered_start
-            if actual_right is None or centered_end > actual_right:
-                actual_right = centered_end
-
-    if actual_left is None:
-        actual_left = 10
-    if actual_right is None:
-        actual_right = 10
+            cs    = c_left + (c_w - txt_w) // 2
+            ce    = cs + txt_w
+            actual_left  = cs if actual_left is None else min(actual_left, cs)
+            actual_right = ce if actual_right is None else max(actual_right, ce)
+    if actual_left  is None: actual_left  = 10
+    if actual_right is None: actual_right = 10
 
     n_overlay_rows = max(len(adj_count_overlays), len(angle_error_overlays))
-    if n_overlay_rows == 0:
-        pass
-    else:
+    if n_overlay_rows > 0:
         overlay_header_h = overlay_header_h_calc
-        base_y = header_h + line_h * len(lines) + 10
-
-        first_err_x = None
-        first_err_w = None
-        first_adj_x = None
-        first_adj_total_w = None
+        base_y           = header_h + line_h * len(lines) + 10
+        first_err_x = first_err_w = first_adj_x = first_adj_total_w = None
 
         for oi in range(n_overlay_rows):
             row_y = base_y + overlay_header_h + oi * (small_line_h - 2) - 2
-
             if oi < len(adj_count_overlays):
                 angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
-
                 angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
-                if count_txt is not None:
-                    count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
-                else:
-                    count_w = 0
-
+                count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2] if count_txt else 0
                 total_w = angle_w + count_w
-
-                if oi == 0:
-                    adj_x = actual_right - total_w
-                    first_adj_x = adj_x
-                    first_adj_total_w = total_w
-                else:
-                    adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
-
-                draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgb)
-
-                if count_txt is not None:
-                    adj_fill = ADJ_COUNT_POSITIVE if (adj_raw is None or adj_raw >= 0) else ADJ_COUNT_NEGATIVE
+                adj_x   = actual_right - total_w if oi == 0 else first_adj_x + (first_adj_total_w - total_w) // 2
+                if oi == 0: first_adj_x = adj_x; first_adj_total_w = total_w
+                draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgba)
+                if count_txt:
+                    base_color = ADJ_COUNT_POSITIVE if (adj_raw is None or adj_raw >= 0) else ADJ_COUNT_NEGATIVE
+                    adj_fill = (*base_color, int(text_opacity * 255))
                     draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
-
             if oi < len(angle_error_overlays):
-                err_txt = angle_error_overlays[oi][0]
+                err_txt   = angle_error_overlays[oi][0]
                 err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font)[2]
-                if oi == 0:
-                    err_x = actual_left
-                    first_err_x = err_x
-                    first_err_w = err_txt_w
-                else:
-                    err_x = first_err_x + (first_err_w - err_txt_w) // 2
-                draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgb)
+                err_x     = actual_left if oi == 0 else first_err_x + (first_err_w - err_txt_w) // 2
+                if oi == 0: first_err_x = err_x; first_err_w = err_txt_w
+                draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgba)
 
         if show_overlay_header and n_overlay_rows > 0:
             hdr_y = base_y - 2
             if angle_error_overlays and first_err_x is not None and first_err_w is not None:
-                err_hdr_w = draw.textbbox((0, 0), "Error", font=small_font)[2]
-                err_hdr_x = first_err_x + (first_err_w - err_hdr_w) // 2
-                draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=text_rgb)
+                w_e = draw.textbbox((0, 0), "Error", font=small_font)[2]
+                draw.text((first_err_x + (first_err_w - w_e) // 2, hdr_y), "Error",
+                          font=small_font, fill=text_rgba)
             if adj_count_overlays and first_adj_x is not None and first_adj_total_w is not None:
-                adj_hdr_w = draw.textbbox((0, 0), "Angle", font=small_font)[2]
-                adj_hdr_x = first_adj_x + (first_adj_total_w - adj_hdr_w) // 2
-                draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=text_rgb)
+                w_a = draw.textbbox((0, 0), "Angle", font=small_font)[2]
+                draw.text((first_adj_x + (first_adj_total_w - w_a) // 2, hdr_y), "Angle",
+                          font=small_font, fill=text_rgba)
 
     tmp = IMAGE_PATH + ".tmp.png"
     try:
@@ -2074,10 +1982,10 @@ def check_and_update(current_version):
         latest = data["tag_name"]
         if latest == current_version:
             return
-        asset_name = f"NBTrackr-imgpin-{latest}.tar.xz"
+        asset_name  = f"NBTrackr-imgpin-{latest}.tar.xz"
         folder_name = asset_name.replace(".tar.xz", "")
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(script_dir)
+        script_dir  = os.path.dirname(os.path.abspath(__file__))
+        parent_dir  = os.path.dirname(script_dir)
         folder_path = os.path.join(parent_dir, folder_name)
         if os.path.exists(folder_path):
             print(f"[Updater] Latest version ({latest}) is already downloaded.")
@@ -2086,15 +1994,12 @@ def check_and_update(current_version):
             print("[Updater] Then run the script again from the new version.")
             sys.exit(0)
         download_url = next(
-            (a["browser_download_url"] for a in data["assets"]
-             if a["name"] == asset_name),
-            None
-        )
+            (a["browser_download_url"] for a in data["assets"] if a["name"] == asset_name), None)
         if not download_url:
             print(f"[Updater] Couldn't find asset {asset_name} in release {latest}.")
             return
         print(f"[Updater] Downloading {asset_name} …")
-        tmpdir = tempfile.mkdtemp()
+        tmpdir       = tempfile.mkdtemp()
         archive_path = os.path.join(tmpdir, asset_name)
         with requests.get(download_url, stream=True, timeout=10) as dl:
             dl.raise_for_status()
@@ -2103,10 +2008,8 @@ def check_and_update(current_version):
                     f.write(chunk)
         print(f"[Updater] Extracting to {parent_dir} …")
         with tarfile.open(archive_path, "r:xz") as tar:
-            tar.extractall(
-                path=parent_dir,
-                filter=lambda tarinfo, memberpath: tarinfo
-            )
+            tar.extractall(path=parent_dir,
+                           filter=lambda tarinfo, memberpath: tarinfo)
         os.remove(archive_path)
         body = data.get("body", "").strip()
         if body:
@@ -2117,15 +2020,86 @@ def check_and_update(current_version):
         print(f"\n[Updater] Update completed. New version extracted to:")
         print(f"    {folder_path}")
         print("[Updater] To finish setup, navigate to the new folder and run:")
-        print("    chmod +x install.sh  # Make script executable")
-        print("    ./install.sh         # Run installer")
+        print("    chmod +x install.sh")
+        print("    ./install.sh")
         sys.exit(0)
     except Exception as e:
         print(f"[Updater] Update failed: {e}")
-
 # ---------------------- AUTO UPDATER - END ----------------------
 
+# ---------------------- Qt Scheduler ----------------------
+
+class _Scheduler(QObject):
+    _fn_signal = pyqtSignal(object)
+
+    def __init__(self):
+        super().__init__()
+        self._fn_signal.connect(self._invoke, Qt.QueuedConnection)
+
+    @staticmethod
+    def _invoke(fn):
+        try:
+            fn()
+        except Exception as e:
+            log(f"[Scheduler] Exception in scheduled call: {e}")
+
+    def schedule(self, fn):
+        self._fn_signal.emit(fn)
+
+
+# ---------------------- Qt Overlay Window ----------------------
+
+class OverlayWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlags(
+            Qt.FramelessWindowHint |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool |
+            Qt.X11BypassWindowManagerHint
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+        self.setContentsMargins(0, 0, 0, 0)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._label = QLabel(self)
+        self._label.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._label)
+
+        self._drag_pos = None
+
+    def mousePressEvent(self, event):
+        if not LOCK_OVERLAY and event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if not LOCK_OVERLAY and self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if not LOCK_OVERLAY and event.button() == Qt.LeftButton and self._drag_pos is not None:
+            self._drag_pos = None
+            if self.width() > 1 and self.height() > 1:
+                save_config()
+                log(f"[Window] Manual window repositioning finished (pos: {self.x()},{self.y()})")
+            event.accept()
+
+
 # ---------------------- Helpers ----------------------
+
+def pil_to_qpixmap(pil_img):
+    if pil_img.mode != 'RGBA':
+        pil_img = pil_img.convert('RGBA')
+    data    = pil_img.tobytes('raw', 'RGBA')
+    qimage  = QImage(data, pil_img.width, pil_img.height,
+                     pil_img.width * 4, QImage.Format_RGBA8888)
+    return QPixmap.fromImage(qimage)
 
 def show_window():
     if HEADLESS:
@@ -2136,11 +2110,10 @@ def show_window():
     log("[Window] Showing overlay window")
     try:
         if method == "withdraw":
-            root.deiconify()
-            root.lift()
-            root.update()
+            window.show()
+            window.raise_()
         else:
-            root.update_idletasks()
+            window.show()
     except Exception as e:
         log(f"[Window] Failed to show window: {e}")
 
@@ -2150,23 +2123,17 @@ def hide_window():
     global _window_visible
     _window_visible = False
     method = get_window_hiding_method()
+    pos = window.pos()
+    log(f"[Window] Hiding overlay window (Method: {method}, Pos: {pos.x()}, {pos.y()})")
     try:
         if method == "withdraw":
-            root.withdraw()
-            log(f"[Window] Hiding overlay window (Method: {method})")
+            window.hide()
         elif method == "one_pixel":
-            try:
-                label.config(image=TRANSPARENT_TK)
-                label.image = TRANSPARENT_TK
-            except Exception:
-                pass
-            root.geometry("1x1+0+0")
-            root.update_idletasks()
-            log(f"[Window] Hiding overlay window (Method: {method}, Geometry: {root.geometry()})")
+            label.clear()
+            window.resize(1, 1)
+            window.move(0, 0)
         else:
-            root.geometry("+-10000+-10000")
-            root.update_idletasks()
-            log(f"[Window] Hiding overlay window (Method: {method}, Geometry: {root.geometry()})")
+            window.move(-10000, -10000)
     except Exception as e:
         log(f"[Window] Failed to hide window: {e}")
 
@@ -2177,28 +2144,26 @@ def place_window(width, height):
         pos = load_config()
         if pos:
             sx, sy = pos
-            root.geometry(f"{int(width)}x{int(height)}+{int(sx)}+{int(sy)}")
-            root.update()
+            window.setGeometry(int(sx), int(sy), int(width), int(height))
         else:
-            cur_x = root.winfo_x()
-            cur_y = root.winfo_y()
+            cur_x = window.x()
+            cur_y = window.y()
             if cur_x <= -9000 or cur_y <= -9000:
                 cur_x, cur_y = 0, 0
-            root.geometry(f"{int(width)}x{int(height)}+{cur_x}+{cur_y}")
+            window.setGeometry(cur_x, cur_y, int(width), int(height))
     except Exception:
         try:
-            root.geometry(f"{int(width)}x{int(height)}+0+0")
+            window.resize(int(width), int(height))
         except Exception:
             pass
 
 def _render_and_apply_blank_custom_overlay(custom):
     bg_hex = custom.get("background_color", "#FFFFFF")
     bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
+    bg_opacity = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
 
-    w = 500
-    h = 100
-
-    blank_img = Image.new("RGBA", (w, h), (*bg_rgb, 255))
+    blank_img = Image.new("RGBA", (500, 100),
+                          (bg_rgb[0], bg_rgb[1], bg_rgb[2], int(bg_opacity * 255)))
     try:
         tmp = IMAGE_PATH + ".tmp.png"
         blank_img.save(tmp, format="PNG")
@@ -2206,9 +2171,11 @@ def _render_and_apply_blank_custom_overlay(custom):
             os.replace(tmp, IMAGE_PATH)
         except Exception:
             try:
-                if os.path.exists(IMAGE_PATH): os.remove(IMAGE_PATH)
+                if os.path.exists(IMAGE_PATH):
+                    os.remove(IMAGE_PATH)
                 os.rename(tmp, IMAGE_PATH)
-            except: pass
+            except Exception:
+                pass
     except Exception as e:
         log("Failed to save custom overlay:", e)
 
@@ -2221,9 +2188,8 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
         log(f"[System] Headless mode: overlay written ({w}x{h}px)")
         return
     try:
-        tk_img = ImageTk.PhotoImage(pil_img)
-        label.config(image=tk_img)
-        label.image = tk_img
+        qpixmap = pil_to_qpixmap(pil_img)
+        label.setPixmap(qpixmap)
 
         w = int(width) if width is not None else pil_img.width
         h = int(height) if height is not None else pil_img.height
@@ -2235,7 +2201,7 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
         place_window(w, h)
         show_window()
 
-        log(f"[Window] Applying overlay ({w}x{h}px) at ({root.winfo_x()},{root.winfo_y()})")
+        log(f"[Window] Applying overlay ({w}x{h}px) at ({window.x()},{window.y()})")
     except Exception as e:
         log(f"[Window] Failed to apply overlay: {e}")
 
@@ -2270,15 +2236,12 @@ def load_config():
     try:
         if not os.path.exists(CONFIG_DIR):
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            log(f"[Config] Created config directory: {CONFIG_DIR}")
-
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, "r") as f:
                 config = json.load(f)
             pos = config.get("position")
             if pos and isinstance(pos, dict):
-                x = pos.get("x")
-                y = pos.get("y")
+                x = pos.get("x"); y = pos.get("y")
                 if isinstance(x, int) and isinstance(y, int):
                     log(f"[Config] Loaded window position: x={x}, y={y}")
                     return x, y
@@ -2290,10 +2253,8 @@ def save_config():
     try:
         if not os.path.exists(CONFIG_DIR):
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            log(f"[Config] Created config directory: {CONFIG_DIR}")
-
-        x = root.winfo_x()
-        y = root.winfo_y()
+        x = window.x()
+        y = window.y()
         config = {"position": {"x": x, "y": y}}
         with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=2)
@@ -2314,8 +2275,15 @@ def load_customizations():
         log(f"[Config] Failed to load customizations.json: {e}")
     return False
 
+
+# --------------------- Startup --------------------------
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     print(f"NBTrackr version: {APP_VERSION}\n")
+
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+    log(f"[System] QT_QPA_PLATFORM set to: {os.environ.get('QT_QPA_PLATFORM')}")
 
     check_ninjabrainbot_version()
 
@@ -2333,57 +2301,38 @@ if __name__ == "__main__":
         else:
             print("Skipping update. Continuing with current version", APP_VERSION, "\n")
 
-# --------------------- NBTrackr Pinned Image Overlay Overlay --------------------------
+# --------------------- Qt Application & Overlay Window --------------------------
 
 IMAGE_PATH = "/tmp/imgpin-overlay.png"
 
 GREEN_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_green.png")
-RED_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_red.png")
+RED_IMG   = os.path.join(os.path.dirname(__file__), "assets/boat_red.png")
 
 if HEADLESS:
-    root = None
-    label = None
-    TRANSPARENT_TK = None
+    app    = None
+    window = None
+    label  = None
+    _scheduler = None
 else:
-    root = tk.Tk()
-    root.overrideredirect(True)
-    root.wm_attributes("-topmost", True)
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+
+    window = OverlayWindow()
 
     saved_pos = load_config()
     if saved_pos:
         sx, sy = saved_pos
         try:
-            root.geometry(f"+{sx}+{sy}")
+            window.move(sx, sy)
         except Exception:
             pass
 
-    label = tk.Label(root, borderwidth=0, highlightthickness=0)
-    label.pack()
+    label = window._label
 
-    TRANSPARENT_IMG = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-    TRANSPARENT_TK = ImageTk.PhotoImage(TRANSPARENT_IMG)
-    
-    try:
-        root.wm_attributes("-type", "tooltip")
-    except Exception as e:
-        log("Could not set window type to tooltip:", e)
+_scheduler = _Scheduler() if not HEADLESS else None
 
-    _init_hiding_method = get_window_hiding_method()
-    if _init_hiding_method == "withdraw":
-        root.withdraw()
-    elif _init_hiding_method == "one_pixel":
-        try:
-            label.config(image=TRANSPARENT_TK)
-            label.image = TRANSPARENT_TK
-        except Exception:
-            pass
-        root.geometry("1x1+0+0")
-        root.update_idletasks()
-    else:
-        root.geometry("+-10000+-10000")
-        root.update_idletasks()
 
-image_queue = queue.Queue(maxsize=1)
+# --------------------- Status & Thread Setup --------------------------
 
 status_lock = threading.Lock()
 status = {
@@ -2408,7 +2357,7 @@ USE_CUSTOM_PINNED_IMAGE = load_customizations()
 
 def idle_update_frequency():
     with status_lock:
-        result_type = status["resultType"]
+        result_type   = status["resultType"]
         blind_showing = status.get("blindCurrentlyShowing", False)
 
     if result_type == "TRIANGULATION" or (result_type == "BLIND" and blind_showing):
@@ -2433,9 +2382,9 @@ def api_polling_thread():
                 _nb_was_connected = True
                 _nb_error_printed = False
 
-            boat_state   = boat_resp.get("boatState")
-            boat_angle   = boat_resp.get("boatAngle", None)
-            result_type  = stronghold_resp.get("resultType")
+            boat_state = boat_resp.get("boatState")
+            boat_angle = boat_resp.get("boatAngle", None)
+            result_type = stronghold_resp.get("resultType")
             player_angle = stronghold_resp.get("playerPosition", {}).get("horizontalAngle")
             is_in_nether = stronghold_resp.get("playerPosition", {}).get("isInNether", False)
 
@@ -2457,10 +2406,10 @@ def api_polling_thread():
                 status["resultType"] = result_type
                 status["isInNether"] = is_in_nether
                 status["blindModeEnabled"] = blind_enabled
-                status["boat_resp"]       = boat_resp
+                status["boat_resp"] = boat_resp
                 status["stronghold_resp"] = stronghold_resp
-                status["blind_resp"]      = blind_resp
-                status["info_resp"]       = info_resp
+                status["blind_resp"] = blind_resp
+                status["info_resp"] = info_resp
 
                 blind_changed = False
                 has_valid_result = blind_result and blind_result.get("evaluation") is not None
@@ -2468,8 +2417,8 @@ def api_polling_thread():
 
                 if has_valid_result and prev_had_valid_result:
                     if (blind_result.get("evaluation") != prev_blind_result.get("evaluation") or
-                        blind_result.get("xInNether") != prev_blind_result.get("xInNether") or
-                        blind_result.get("zInNether") != prev_blind_result.get("zInNether")):
+                            blind_result.get("xInNether") != prev_blind_result.get("xInNether") or
+                            blind_result.get("zInNether") != prev_blind_result.get("zInNether")):
                         blind_changed = True
                 elif has_valid_result and not prev_had_valid_result:
                     blind_changed = True
@@ -2486,7 +2435,7 @@ def api_polling_thread():
                         status["blindShowUntil"] = 0
                     else:
                         _hide_enabled = _c.get("blind_info_hide_after_enabled", False)
-                        _hide_after = _c.get("blind_info_hide_after", 20)
+                        _hide_after   = _c.get("blind_info_hide_after", 20)
                         status["blindShowUntil"] = (now + _hide_after) if _hide_enabled else float("inf")
 
                 if not blind_enabled or result_type == "TRIANGULATION":
@@ -2497,20 +2446,16 @@ def api_polling_thread():
                 show_boat_icon_setting = bool(_c.get("show_boat_icon", True))
                 boat_info_hide_after_enabled_setting = bool(_c.get("boat_info_hide_after_enabled", True))
                 boat_info_hide_after_setting = float(_c.get("boat_info_hide_after", 10))
-
-                boat_hide_duration = boat_info_hide_after_setting if boat_info_hide_after_enabled_setting else float("inf")
+                boat_hide_duration = (boat_info_hide_after_setting
+                                      if boat_info_hide_after_enabled_setting else float("inf"))
 
                 if result_type in ("NONE", "BLIND") and boat_state in ("VALID", "ERROR"):
                     if not show_boat_icon_setting:
-                        status["lastShown"] = None
-                        status["showUntil"] = 0
-                        status["lastAngle"] = None
+                        status["lastShown"] = None; status["showUntil"] = 0; status["lastAngle"] = None
                     else:
                         if boat_state == "VALID":
                             if boat_angle == 0:
-                                status["lastShown"] = None
-                                status["showUntil"] = 0
-                                status["lastAngle"] = None
+                                status["lastShown"] = None; status["showUntil"] = 0; status["lastAngle"] = None
                             elif boat_state != prev_state:
                                 status["lastShown"] = boat_state
                                 status["showUntil"] = now + boat_hide_duration
@@ -2529,9 +2474,7 @@ def api_polling_thread():
                                 else:
                                     status["showUntil"] = 0
                 else:
-                    status["lastShown"] = None
-                    status["showUntil"] = 0
-                    status["lastAngle"] = None
+                    status["lastShown"] = None; status["showUntil"] = 0; status["lastAngle"] = None
 
         except Exception as e:
             if _nb_was_connected:
@@ -2545,18 +2488,12 @@ def api_polling_thread():
                 _nb_error_printed = True
 
             with status_lock:
-                status["boatState"] = None
-                status["boatAngle"] = None
-                status["resultType"] = None
-                status["isInNether"] = False
-                status["lastShown"] = None
-                status["showUntil"] = 0
-                status["lastAngle"] = None
-                status["blindModeEnabled"] = False
-                status["blindResult"] = None
-                status["blindShowUntil"] = 0
-                status["blindCurrentlyShowing"] = False
-                status["info_resp"] = {}
+                status.update({
+                    "boatState": None, "boatAngle": None, "resultType": None,
+                    "isInNether": False, "lastShown": None, "showUntil": 0, "lastAngle": None,
+                    "blindModeEnabled": False, "blindResult": None,
+                    "blindShowUntil": 0, "blindCurrentlyShowing": False, "info_resp": {},
+                })
 
         time.sleep(MAX_API_POLLING_RATE)
 
@@ -2573,11 +2510,11 @@ def blind_timer_monitor_thread():
     log("[System] Timer monitor thread started")
     while True:
         with status_lock:
-            blind_show_until = status["blindShowUntil"]
+            blind_show_until        = status["blindShowUntil"]
             blind_currently_showing = status.get("blindCurrentlyShowing", False)
 
         if blind_currently_showing and blind_show_until > 0:
-            now = time.time()
+            now            = time.time()
             time_remaining = blind_show_until - now
 
             if time_remaining <= 0:
@@ -2587,53 +2524,14 @@ def blind_timer_monitor_thread():
                     status["blindShowUntil"] = -1
                 try:
                     _schedule(hide_window)
-                except:
+                except Exception:
                     pass
                 time.sleep(1)
             else:
-                sleep_time = min(time_remaining, 1.0)
-                log(f"[Timer Monitor] Sleeping {sleep_time:.1f}s until blind expires")
-                time.sleep(sleep_time)
+                time.sleep(min(time_remaining, 1.0))
         else:
             time.sleep(1)
 
-def update_image():
-    global position_set
-
-    try:
-        img = image_queue.get_nowait()
-    except queue.Empty:
-        root.after(10, update_image)
-        return
-
-    if img is None:
-        hide_window()
-    else:
-        tk_img = ImageTk.PhotoImage(img)
-        label.configure(image=tk_img)
-        label.image = tk_img
-
-        place_window(img.width, img.height)
-        position_set = True
-
-        show_window()
-    root.after(100, update_image)
-
-
-def start_move(event):
-    log("[Window] Manual window repositioning started")
-    root._drag_start_x = event.x
-    root._drag_start_y = event.y
-
-def on_motion(event):
-    x = event.x_root - root._drag_start_x
-    y = event.y_root - root._drag_start_y
-    root.geometry(f"+{x}+{y}")
-
-def on_release(event):
-    if root.winfo_width() > 1 and root.winfo_height() > 1:
-        save_config()
-        log(f"[Window] Manual window repositioning finished (Geometry: {root.geometry()})")
 
 threading.Thread(target=api_polling_thread, daemon=True).start()
 threading.Thread(target=image_update_thread, daemon=True).start()
@@ -2647,9 +2545,4 @@ if HEADLESS:
     except KeyboardInterrupt:
         pass
 else:
-    if not LOCK_OVERLAY:
-        root.bind("<ButtonPress-1>", start_move)
-        root.bind("<B1-Motion>", on_motion)
-        root.bind("<ButtonRelease-1>", on_release)
-    root.after(100, update_image)
-    root.mainloop()
+    sys.exit(app.exec_())
