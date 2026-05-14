@@ -913,6 +913,7 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
             _icon_size = new_header_h - 8
             with Image.open(_boat_icon_path) as _bicon:
                 _bicon = _bicon.convert("RGBA").resize((_icon_size, _icon_size), Image.Resampling.LANCZOS)
+                _bicon = _apply_img_opacity(_bicon, text_opacity)
                 _icon_x = img_w - _icon_size - 20
                 _icon_y = (new_header_h - _icon_size) // 2
                 img.alpha_composite(_bicon, (_icon_x, _icon_y))
@@ -1082,6 +1083,7 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
             try:
                 with Image.open(icon_path) as icon_img:
                     icon_img = icon_img.convert("RGBA").resize((icon_size, icon_size), Image.Resampling.LANCZOS)
+                    icon_img = _apply_img_opacity(icon_img, text_opacity)
                     icon_y = row_y + (this_msg_h - icon_size) // 2
                     img.alpha_composite(icon_img, (CELL_PAD_MAIN, icon_y))
                 text_start_x = CELL_PAD_MAIN + icon_size + 8
@@ -1497,6 +1499,7 @@ def generate_custom_pinned_image():
             try:
                 icon = Image.open(icon_path).convert("RGBA")
                 icon = icon.resize((64, 64), Image.LANCZOS)
+                icon = _apply_img_opacity(icon, text_opacity)
             except Exception as e:
                 log("[Render] Failed to load/process icon:", e)
             else:
@@ -2100,6 +2103,14 @@ def pil_to_qpixmap(pil_img):
     qimage  = QImage(data, pil_img.width, pil_img.height,
                      pil_img.width * 4, QImage.Format_RGBA8888)
     return QPixmap.fromImage(qimage)
+
+def _apply_img_opacity(img, op):
+    if op >= 1.0:
+        return img
+    img = img.convert("RGBA")
+    _a = img.split()[-1].point(lambda i: int(i * op))
+    img.putalpha(_a)
+    return img
 
 def show_window():
     if HEADLESS:
