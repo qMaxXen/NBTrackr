@@ -63,7 +63,9 @@ DEFAULT_CUSTOMIZATIONS = {
     "idle_api_polling_rate": 0.2,
     "max_api_polling_rate": 0.05,
     "auto_hide_window": True,
-    "hide_method": "withdraw"
+    "hide_method": "withdraw",
+    "background_opacity": 1.0,
+    "text_opacity": 1.0
 }
 
 DISPLAY_NAMES = {
@@ -206,6 +208,12 @@ def render_default_preview(settings: dict) -> Image.Image:
     user_font_path = settings.get("font_name", "")
     font       = _load_preview_font(user_font_path, font_size)
     small_font = _load_preview_font(user_font_path, max(8, int(font_size * 0.85)))
+
+    bg_opacity   = settings.get("background_opacity", 1.0)
+    text_opacity = settings.get("text_opacity", 1.0)
+
+    def _bc(c): return (*c[:3], int(bg_opacity * 255))
+    def _tc(c): return (*c[:3], int(text_opacity * 255))
 
     dummy_img  = Image.new("RGBA", (1, 1))
     dummy_draw = ImageDraw.Draw(dummy_img)
@@ -359,18 +367,18 @@ def render_default_preview(settings: dict) -> Image.Image:
     NB_ROW_SEP_C     = (42,  46,  50,  255)
     NB_THROW_HDR_FG_C= (192, 192, 192)
 
-    img  = Image.new("RGBA", (img_w, img_h), NB_ROW_BG_C)
+    img  = Image.new("RGBA", (img_w, img_h), _bc(NB_ROW_BG_C))
     draw = ImageDraw.Draw(img)
 
-    draw.rectangle([0, 0, img_w - 1, NB_NEW_HDR_H - 1], fill=NEW_HEADER_BG_C)
+    draw.rectangle([0, 0, img_w - 1, NB_NEW_HDR_H - 1], fill=_bc(NEW_HEADER_BG_C))
     draw.text((CELL_PAD_MAIN + 4, (NB_NEW_HDR_H - th()) // 2),
-              "NBTrackr", font=font, fill=NB_TEXT_C)
+              "NBTrackr", font=font, fill=_tc(NB_TEXT_C))
     ver_text = "(preview)"
     ver_x    = CELL_PAD_MAIN + 4 + tw("NBTrackr") + 8
     a_t, _   = font.getmetrics()
     a_v, _   = small_font.getmetrics()
     ver_y    = (NB_NEW_HDR_H - th()) // 2 + a_t - a_v
-    draw.text((ver_x, ver_y), ver_text, font=small_font, fill=NB_VER_FG_C)
+    draw.text((ver_x, ver_y), ver_text, font=small_font, fill=_tc(NB_VER_FG_C))
 
     _bp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "boat_green_icon.png")
     try:
@@ -384,13 +392,13 @@ def render_default_preview(settings: dict) -> Image.Image:
         pass
 
     y0 = NB_NEW_HDR_H
-    draw.rectangle([0, y0, img_w - 1, y0 + HDR_SEP_PX - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, y0, img_w - 1, y0 + HDR_SEP_PX - 1], fill=_bc(NB_HDR_SEP_C))
 
     col_hdr_y0 = y0 + HDR_SEP_PX
-    draw.rectangle([0, col_hdr_y0, img_w - 1, col_hdr_y0 + HDR_SEP_PX - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, col_hdr_y0, img_w - 1, col_hdr_y0 + HDR_SEP_PX - 1], fill=_bc(NB_HDR_SEP_C))
 
     col_hdr_start = col_hdr_y0 + HDR_SEP_PX
-    draw.rectangle([0, col_hdr_start, img_w - 1, col_hdr_start + hdr_h - 1], fill=NB_HEADER_BG_C)
+    draw.rectangle([0, col_hdr_start, img_w - 1, col_hdr_start + hdr_h - 1], fill=_bc(NB_HEADER_BG_C))
     x = 0
     for key in col_keys:
         cw  = col_widths[key]
@@ -406,19 +414,19 @@ def render_default_preview(settings: dict) -> Image.Image:
             text_x    = max(x, min(text_x, x + cw - lw))
         else:
             text_x = x + (cw - lw) // 2
-        draw.text((text_x, col_hdr_start + (hdr_h - th()) // 2), lbl, font=font, fill=NB_TEXT_C)
+        draw.text((text_x, col_hdr_start + (hdr_h - th()) // 2), lbl, font=font, fill=_tc(NB_TEXT_C))
         x += cw
 
     sep_below_hdr = col_hdr_start + hdr_h
-    draw.rectangle([0, sep_below_hdr, img_w - 1, sep_below_hdr + HDR_SEP_PX - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, sep_below_hdr, img_w - 1, sep_below_hdr + HDR_SEP_PX - 1], fill=_bc(NB_HDR_SEP_C))
 
     row_area_y = sep_below_hdr + HDR_SEP_PX
 
     for row_idx, r in enumerate(rows):
         y = row_area_y + row_idx * (body_h + ROW_SEP)
-        draw.rectangle([0, y, img_w - 1, y + body_h - 1], fill=NB_ROW_BG_C)
+        draw.rectangle([0, y, img_w - 1, y + body_h - 1], fill=_bc(NB_ROW_BG_C))
         if row_idx < num_rows - 1:
-            draw.rectangle([0, y + body_h, img_w - 1, y + body_h + ROW_SEP - 1], fill=NB_ROW_SEP_C)
+            draw.rectangle([0, y + body_h, img_w - 1, y + body_h + ROW_SEP - 1], fill=_bc(NB_ROW_SEP_C))
 
         a_body, d_body = font.getmetrics()
         text_y = y + (body_h - (a_body + d_body)) // 2
@@ -428,7 +436,7 @@ def render_default_preview(settings: dict) -> Image.Image:
             nonlocal x
             cw  = col_widths[key]
             tw_ = dummy_draw.textbbox((0, 0), text, font=fnt)[2]
-            draw.text((x + (cw - tw_) // 2, text_y), text, font=fnt, fill=fill)
+            draw.text((x + (cw - tw_) // 2, text_y), text, font=fnt, fill=_tc(fill))
             x += cw
 
         def draw_coord_cell(key, coord_pair):
@@ -445,7 +453,7 @@ def render_default_preview(settings: dict) -> Image.Image:
             full_w = sum(tw(p[0]) for p in parts)
             bx = x + (cw - full_w) // 2
             for pt, pc in parts:
-                draw.text((bx, text_y), pt, font=font, fill=pc)
+                draw.text((bx, text_y), pt, font=font, fill=_tc(pc))
                 bx += tw(pt)
             x += cw
 
@@ -461,30 +469,30 @@ def render_default_preview(settings: dict) -> Image.Image:
         dir_col  = _gradient_color(abs(r['dir']))
         full_w   = tw(base_str) + tw(dir_part)
         bx       = lx + (cw - full_w) // 2
-        draw.text((bx, text_y), base_str, font=font, fill=NB_TEXT_C)
-        draw.text((bx + tw(base_str), text_y), dir_part, font=font, fill=dir_col)
+        draw.text((bx, text_y), base_str, font=font, fill=_tc(NB_TEXT_C))
+        draw.text((bx + tw(base_str), text_y), dir_part, font=font, fill=_tc(dir_col))
         x += cw
 
     throw_base_y = main_h
-    draw.rectangle([0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP_PX - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP_PX - 1], fill=_bc(NB_HDR_SEP_C))
 
     th_title_y = throw_base_y + HDR_SEP_PX
-    draw.rectangle([0, th_title_y, img_w - 1, th_title_y + hdr_h - 1], fill=NB_HEADER_BG_C)
+    draw.rectangle([0, th_title_y, img_w - 1, th_title_y + hdr_h - 1], fill=_bc(NB_HEADER_BG_C))
     draw.text((CELL_PAD_MAIN + 6, th_title_y + (hdr_h - th()) // 2),
-              "Ender eye throws", font=font, fill=NB_TEXT_C)
+              "Ender eye throws", font=font, fill=_tc(NB_TEXT_C))
 
     th_hdr_y = th_title_y + hdr_h
-    draw.rectangle([0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=NB_HEADER_BG_C)
+    draw.rectangle([0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=_bc(NB_HEADER_BG_C))
     x = 0
     for i, thdr in enumerate(throw_headers):
         cw = throw_col_widths[i]
         lw = tw(thdr, small_font)
         ty = th_hdr_y + (small_h - th(small_font)) // 2
-        draw.text((x + (cw - lw) // 2, ty), thdr, font=small_font, fill=NB_TEXT_C)
+        draw.text((x + (cw - lw) // 2, ty), thdr, font=small_font, fill=_tc(NB_TEXT_C))
         x += cw
 
     sep2_y = th_hdr_y + small_h
-    draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP_PX - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP_PX - 1], fill=_bc(NB_HDR_SEP_C))
 
     for ti, trow in enumerate(PREVIEW_EYE_THROWS):
         ty  = sep2_y + HDR_SEP_PX + ti * (body_h + ROW_SEP)
@@ -503,14 +511,14 @@ def render_default_preview(settings: dict) -> Image.Image:
                     adj_col = (117, 204, 108) if (cnt_raw is None or cnt_raw >= 0) else (204, 110, 114)
                     full_w  = tw(aw_str, small_font) + tw(cnt_str, small_font)
                     bx      = x + (cw - full_w) // 2
-                    draw.text((bx, sy), aw_str, font=small_font, fill=NB_THROW_HDR_FG_C)
-                    draw.text((bx + tw(aw_str, small_font), sy), cnt_str, font=small_font, fill=adj_col)
+                    draw.text((bx, sy), aw_str, font=small_font, fill=_tc(NB_THROW_HDR_FG_C))
+                    draw.text((bx + tw(aw_str, small_font), sy), cnt_str, font=small_font, fill=_tc(adj_col))
                 else:
                     cw_ = tw(aw_str, small_font)
-                    draw.text((x + (cw - cw_) // 2, sy), aw_str, font=small_font, fill=NB_THROW_HDR_FG_C)
+                    draw.text((x + (cw - cw_) // 2, sy), aw_str, font=small_font, fill=_tc(NB_THROW_HDR_FG_C))
             else:
                 cw_ = tw(cell, small_font)
-                draw.text((x + (cw - cw_) // 2, sy), cell, font=small_font, fill=NB_THROW_HDR_FG_C)
+                draw.text((x + (cw - cw_) // 2, sy), cell, font=small_font, fill=_tc(NB_THROW_HDR_FG_C))
             x += cw
 
     return img
@@ -526,6 +534,12 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
     user_font_path = settings.get("font_name", "")
     font       = _load_preview_font(user_font_path, font_size)
     small_font = _load_preview_font(user_font_path, max(8, int(font_size * 0.85)))
+
+    bg_opacity   = settings.get("background_opacity", 1.0)
+    text_opacity = settings.get("text_opacity", 1.0)
+
+    def _bc(c): return (*c[:3], int(bg_opacity * 255))
+    def _tc(c): return (*c[:3], int(text_opacity * 255))
 
     dummy_img  = Image.new("RGBA", (1, 1))
     dummy_draw = ImageDraw.Draw(dummy_img)
@@ -622,15 +636,15 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
     throw_h = HDR_SEP + hdr_h + small_h + HDR_SEP + num_throw_rows * (body_h + ROW_SEP)
     img_h   = main_h + throw_h
 
-    img  = Image.new("RGBA", (img_w, img_h), NB_ROW_BG_C)
+    img  = Image.new("RGBA", (img_w, img_h), _bc(NB_ROW_BG_C))
     draw = ImageDraw.Draw(img)
 
-    draw.rectangle([0, 0, img_w - 1, new_header_h - 1], fill=NEW_HEADER_BG)
-    draw.text((CELL_PAD + 4, (new_header_h - th()) // 2), "NBTrackr", font=font, fill=NB_TEXT_C)
+    draw.rectangle([0, 0, img_w - 1, new_header_h - 1], fill=_bc(NEW_HEADER_BG))
+    draw.text((CELL_PAD + 4, (new_header_h - th()) // 2), "NBTrackr", font=font, fill=_tc(NB_TEXT_C))
     ver_x = CELL_PAD + 4 + tw("NBTrackr") + 8
     a_t, _ = font.getmetrics(); a_v, _ = small_font.getmetrics()
     ver_y = (new_header_h - th()) // 2 + a_t - a_v
-    draw.text((ver_x, ver_y), "(preview)", font=small_font, fill=NB_VER_FG)
+    draw.text((ver_x, ver_y), "(preview)", font=small_font, fill=_tc(NB_VER_FG))
 
     _bp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "boat_gray_icon.png")
     try:
@@ -641,10 +655,10 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
     except Exception:
         pass
 
-    draw.rectangle([0, new_header_h, img_w - 1, new_header_h + HDR_SEP - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, new_header_h, img_w - 1, new_header_h + HDR_SEP - 1], fill=_bc(NB_HDR_SEP_C))
 
     col_hdr_y0 = new_header_h + HDR_SEP
-    draw.rectangle([0, col_hdr_y0, img_w - 1, col_hdr_y0 + HDR_SEP - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, col_hdr_y0, img_w - 1, col_hdr_y0 + HDR_SEP - 1], fill=_bc(NB_HDR_SEP_C))
 
     col_hdr_start = col_hdr_y0 + HDR_SEP
 
@@ -653,34 +667,34 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
     txt_x = CELL_PAD
     txt_y = new_header_h + HDR_SEP + (body_h - th()) // 2
     lsep  = body_h
-    draw.text((txt_x, txt_y), _prefix, font=font, fill=NB_TEXT_C)
-    draw.text((txt_x + tw(_prefix), txt_y), eval_text, font=font, fill=eval_color)
-    draw.text((txt_x, txt_y + lsep), _l2p, font=font, fill=eval_color)
-    draw.text((txt_x + tw(_l2p), txt_y + lsep), _l2s, font=font, fill=NB_TEXT_C)
-    draw.text((txt_x, txt_y + lsep * 2), _l3, font=font, fill=NB_TEXT_C)
+    draw.text((txt_x, txt_y), _prefix, font=font, fill=_tc(NB_TEXT_C))
+    draw.text((txt_x + tw(_prefix), txt_y), eval_text, font=font, fill=_tc(eval_color))
+    draw.text((txt_x, txt_y + lsep), _l2p, font=font, fill=_tc(eval_color))
+    draw.text((txt_x + tw(_l2p), txt_y + lsep), _l2s, font=font, fill=_tc(NB_TEXT_C))
+    draw.text((txt_x, txt_y + lsep * 2), _l3, font=font, fill=_tc(NB_TEXT_C))
 
     throw_base_y = main_h
-    draw.rectangle([0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP - 1], fill=_bc(NB_HDR_SEP_C))
     th_title_y = throw_base_y + HDR_SEP
-    draw.rectangle([0, th_title_y, img_w - 1, th_title_y + hdr_h - 1], fill=NB_HEADER_BG_C)
-    draw.text((CELL_PAD + 6, th_title_y + (hdr_h - th()) // 2), "Ender eye throws", font=font, fill=NB_TEXT_C)
+    draw.rectangle([0, th_title_y, img_w - 1, th_title_y + hdr_h - 1], fill=_bc(NB_HEADER_BG_C))
+    draw.text((CELL_PAD + 6, th_title_y + (hdr_h - th()) // 2), "Ender eye throws", font=font, fill=_tc(NB_TEXT_C))
     th_hdr_y = th_title_y + hdr_h
-    draw.rectangle([0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=NB_HEADER_BG_C)
+    draw.rectangle([0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=_bc(NB_HEADER_BG_C))
     x = 0
     for i, thdr in enumerate(throw_headers):
         cw = throw_col_widths[i]
         lw = tw(thdr, small_font)
         ty2 = th_hdr_y + (small_h - th(small_font)) // 2
-        draw.text((x + (cw - lw) // 2, ty2), thdr, font=small_font, fill=NB_TEXT_C)
+        draw.text((x + (cw - lw) // 2, ty2), thdr, font=small_font, fill=_tc(NB_TEXT_C))
         x += cw
     sep2_y = th_hdr_y + small_h
-    draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP - 1], fill=NB_HDR_SEP_C)
+    draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP - 1], fill=_bc(NB_HDR_SEP_C))
 
     for ti in range(num_throw_rows):
         ty = sep2_y + HDR_SEP + ti * (body_h + ROW_SEP)
         if ti < num_throw_rows - 1:
             draw.rectangle([0, ty + body_h, img_w - 1, ty + body_h + ROW_SEP - 1],
-                           fill=(42, 46, 50, 255))
+                           fill=_bc((42, 46, 50, 255)))
 
     return img
 
@@ -693,7 +707,13 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     neg_coords_rgb     = _hex_to_rgb(settings.get("negative_coords_color", "#BA6669"), (204, 110, 114))
     portal_dist_enabled = settings.get("portal_nether_color_enabled", False)
     portal_dist_rgb     = _hex_to_rgb(settings.get("portal_nether_color", "#FFA500"), (255, 165, 0))
-    bg_rgba     = (*bg_rgb, 255)
+
+    bg_opacity   = settings.get("background_opacity", 1.0)
+    text_opacity = settings.get("text_opacity", 1.0)
+
+    def _bc(c): return (*c[:3], int(bg_opacity * 255))
+    def _tc(c): return (*c[:3], int(text_opacity * 255))
+    bg_rgba     = _bc(bg_rgb)
 
     shown_count = settings.get("shown_measurements", 1)
     order       = settings.get("text_order", ["distance", "certainty_percentage", "angle",
@@ -813,7 +833,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     if not lines:
         img = Image.new("RGBA", (200, 40), bg_rgba)
         draw = ImageDraw.Draw(img)
-        draw.text((10, 10), "(nothing to show)", font=font, fill=text_rgb)
+        draw.text((10, 10), "(nothing to show)", font=font, fill=_tc(text_rgb))
         return img
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
@@ -910,7 +930,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 span_end = col_x[last_slot] + col_widths[last_slot]
                 span_w = span_end - span_start
                 hx = span_start + (span_w - tw_hdr) // 2
-            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgb)
+            draw.text((hx, 5), hdr_txt, font=font, fill=_tc(text_rgb))
 
     _last_turn_pct = [0.0]
 
@@ -940,7 +960,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     fill = _certainty_color(float(txt.rstrip("%")))
                 except Exception:
                     fill = text_rgb
-                draw.text((_cx(txt), y), txt, font=font, fill=fill)
+                draw.text((_cx(txt), y), txt, font=font, fill=_tc(fill))
 
             elif kind == "angle_change":
                 arrow, num = val
@@ -952,7 +972,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 full_change = f"({arrow} {num})"
                 cw_ = draw.textbbox((0, 0), full_change, font=font)[2]
                 col_start = col_left + (col_w - cw_) // 2
-                draw.text((col_start, y), full_change, font=font, fill=fill)
+                draw.text((col_start, y), full_change, font=font, fill=_tc(fill))
 
             elif kind == "distance":
                 try:
@@ -960,7 +980,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 except Exception:
                     txt = str(val)
                     dval = None
-                draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
+                draw.text((_cx(txt), y), txt, font=font, fill=_tc(text_rgb))
 
             elif kind == "coords":
                 cx_v, cz_v = val
@@ -970,15 +990,15 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
                 full_txt = f"({cx_v}, {cz_v})"
                 bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                draw.text((bx, y), "(", font=font, fill=text_rgb)
+                draw.text((bx, y), "(", font=font, fill=_tc(text_rgb))
                 bx += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((bx, y), x_str, font=font, fill=x_fill)
+                draw.text((bx, y), x_str, font=font, fill=_tc(x_fill))
                 bx += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((bx, y), ", ", font=font, fill=text_rgb)
+                draw.text((bx, y), ", ", font=font, fill=_tc(text_rgb))
                 bx += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((bx, y), z_str, font=font, fill=z_fill)
+                draw.text((bx, y), z_str, font=font, fill=_tc(z_fill))
                 bx += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((bx, y), ")", font=font, fill=text_rgb)
+                draw.text((bx, y), ")", font=font, fill=_tc(text_rgb))
 
             elif kind == "nether_coords_val":
                 cx_v, cz_v = val
@@ -992,19 +1012,19 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                           else (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb))
                 full_txt = f"({cx_v}, {cz_v})"
                 bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                draw.text((bx, y), "(", font=font, fill=punct_fill)
+                draw.text((bx, y), "(", font=font, fill=_tc(punct_fill))
                 bx += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((bx, y), x_str, font=font, fill=x_fill)
+                draw.text((bx, y), x_str, font=font, fill=_tc(x_fill))
                 bx += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((bx, y), ", ", font=font, fill=punct_fill)
+                draw.text((bx, y), ", ", font=font, fill=_tc(punct_fill))
                 bx += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((bx, y), z_str, font=font, fill=z_fill)
+                draw.text((bx, y), z_str, font=font, fill=_tc(z_fill))
                 bx += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((bx, y), ")", font=font, fill=punct_fill)
+                draw.text((bx, y), ")", font=font, fill=_tc(punct_fill))
 
             else:
                 txt = str(val)
-                draw.text((_cx(txt), y), txt, font=font, fill=text_rgb)
+                draw.text((_cx(txt), y), txt, font=font, fill=_tc(text_rgb))
 
     actual_left = None
     actual_right = None
@@ -1079,11 +1099,11 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             else:
                 adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
 
-            draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgb)
+            draw.text((adj_x, row_y), angle_txt, font=small_font, fill=_tc(text_rgb))
 
             if count_txt is not None:
                 adj_fill = ADJ_POS if (adj_raw is None or adj_raw >= 0) else ADJ_NEG
-                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
+                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=_tc(adj_fill))
 
         if oi < len(angle_error_overlays):
             err_txt = angle_error_overlays[oi][0]
@@ -1094,18 +1114,18 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 first_err_w = err_txt_w
             else:
                 err_x = first_err_x + (first_err_w - err_txt_w) // 2
-            draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgb)
+            draw.text((err_x, row_y), err_txt, font=small_font, fill=_tc(text_rgb))
 
     if show_overlay_header and n_overlay_rows > 0:
         hdr_y = base_y - 2
         if angle_error_overlays and first_err_x is not None and first_err_w is not None:
             err_hdr_w = draw.textbbox((0, 0), "Error", font=small_font)[2]
             err_hdr_x = first_err_x + (first_err_w - err_hdr_w) // 2
-            draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=text_rgb)
+            draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=_tc(text_rgb))
         if adj_count_overlays and first_adj_x is not None and first_adj_total_w is not None:
             adj_hdr_w = draw.textbbox((0, 0), "Angle", font=small_font)[2]
             adj_hdr_x = first_adj_x + (first_adj_total_w - adj_hdr_w) // 2
-            draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=text_rgb)
+            draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=_tc(text_rgb))
     return img
 
 PREVIEW_BLIND = {
@@ -1120,10 +1140,16 @@ PREVIEW_BLIND = {
 
 def render_blind_preview(settings: dict) -> Image.Image:
     bg_hex   = settings.get("background_color", "#FFFFFF")
-    text_hex = settings.get("text_color", "#000000")
     bg_rgb   = _hex_to_rgb(bg_hex, (255, 255, 255))
+    text_hex = settings.get("text_color", "#000000")
     text_rgb = _hex_to_rgb(text_hex, (0, 0, 0))
-    bg_rgba  = (*bg_rgb, 255)
+
+    bg_opacity   = settings.get("background_opacity", 1.0)
+    text_opacity = settings.get("text_opacity", 1.0)
+
+    def _bc(c): return (*c[:3], int(bg_opacity * 255))
+    def _tc(c): return (*c[:3], int(text_opacity * 255))
+    bg_rgba  = _bc(bg_rgb)
 
     font_name = settings.get("font_name", "")
     font_size = settings.get("font_size", 18)
@@ -1160,15 +1186,15 @@ def render_blind_preview(settings: dict) -> Image.Image:
     draw = ImageDraw.Draw(img)
 
     x, y = pad, 10
-    draw.text((x, y), line1_pre, font=font, fill=text_rgb)
-    draw.text((x + tw(line1_pre), y), line1_eval, font=font, fill=eval_color)
+    draw.text((x, y), line1_pre, font=font, fill=_tc(text_rgb))
+    draw.text((x + tw(line1_pre), y), line1_eval, font=font, fill=_tc(eval_color))
 
     y += line_h
-    draw.text((pad, y), highroll_txt, font=font, fill=eval_color)
-    draw.text((pad + tw(highroll_txt), y), line2_post, font=font, fill=text_rgb)
+    draw.text((pad, y), highroll_txt, font=font, fill=_tc(eval_color))
+    draw.text((pad + tw(highroll_txt), y), line2_post, font=font, fill=_tc(text_rgb))
 
     y += line_h
-    draw.text((pad, y), line3, font=font, fill=text_rgb)
+    draw.text((pad, y), line3, font=font, fill=_tc(text_rgb))
 
     return img
 
@@ -1462,6 +1488,8 @@ def _collect_eye_settings(vars_dict: dict) -> dict:
         "text_header":                   {k: v.get() for k, v in vars_dict["header_vars"].items()},
         "overworld_coords_format":       vars_dict["_OW_COORDS_KEY_FROM_DISPLAY"].get(
                                              vars_dict["ow_coords_var"].get(), "four_four"),
+        "background_opacity":            vars_dict["bg_opacity_var"].get(),
+        "text_opacity":                  vars_dict["text_opacity_var"].get(),
     }
 
 def _collect_default_settings(vars_dict: dict) -> dict:
@@ -1479,6 +1507,8 @@ def _collect_default_settings(vars_dict: dict) -> dict:
         "overworld_coords_format":       vars_dict["_OW_COORDS_KEY_FROM_DISPLAY"].get(
                                              vars_dict["ow_coords_var"].get(), "four_four"),
         "show_angle_adjustment_count":   vars_dict["adj_count_var"].get(),
+        "background_opacity":            vars_dict["bg_opacity_var"].get(),
+        "text_opacity":                  vars_dict["text_opacity_var"].get(),
     }
 
 def _collect_blind_settings(vars_dict: dict) -> dict:
@@ -1492,6 +1522,8 @@ def _collect_blind_settings(vars_dict: dict) -> dict:
         "text_color":       vars_dict["text_var"].get(),
         "font_name":        font_name,
         "font_size":        font_size,
+        "background_opacity": vars_dict["bg_opacity_var"].get(),
+        "text_opacity":       vars_dict["text_opacity_var"].get(),
     }
 
 
@@ -1711,6 +1743,18 @@ def main():
     font_size_var = tk.IntVar(value=custom.get("font_size", DEFAULT_CUSTOMIZATIONS["font_size"]))
     font_size_spinbox = tk.Spinbox(f_size, from_=8, to=48, textvariable=font_size_var, width=8)
     font_size_spinbox.pack(side="left", padx=5)
+
+    f_bg_op = tk.Frame(g); f_bg_op.pack(fill="x", pady=5)
+    tk.Label(f_bg_op, text="Background opacity", width=26, anchor="w").pack(side="left")
+    bg_opacity_var = tk.DoubleVar(value=float(custom.get("background_opacity", 1.0)))
+    bg_op_spinbox = tk.Spinbox(f_bg_op, from_=0.0, to=1.0, increment=0.1, format="%.2f", textvariable=bg_opacity_var, width=8)
+    bg_op_spinbox.pack(side="left", padx=5)
+
+    f_tx_op = tk.Frame(g); f_tx_op.pack(fill="x", pady=5)
+    tk.Label(f_tx_op, text="Text opacity", width=26, anchor="w").pack(side="left")
+    text_opacity_var = tk.DoubleVar(value=float(custom.get("text_opacity", 1.0)))
+    tx_op_spinbox = tk.Spinbox(f_tx_op, from_=0.0, to=1.0, increment=0.1, format="%.2f", textvariable=text_opacity_var, width=8)
+    tx_op_spinbox.pack(side="left", padx=5)
 
     f_bg = tk.Frame(g); f_bg.pack(fill="x", pady=(5, 2))
     tk.Label(f_bg, text="Background color", width=26, anchor="w").pack(side="left")
@@ -2060,6 +2104,8 @@ def main():
         "portal_dist_color_var":   portal_dist_color_var,
         "hide_method_var":         hide_method_var,
         "_HIDE_METHOD_KEY_FROM_DISPLAY": _HIDE_METHOD_KEY_FROM_DISPLAY,
+        "bg_opacity_var":          bg_opacity_var,
+        "text_opacity_var":        text_opacity_var,
     }
 
     def update_blind_hide_after_state(*_):
@@ -2193,6 +2239,8 @@ def main():
             "auto_hide_window":            auto_hide_var.get(),
             "hide_method":                 _HIDE_METHOD_KEY_FROM_DISPLAY.get(
                                                hide_method_var.get(), "withdraw"),
+            "background_opacity":          round(bg_opacity_var.get(), 2),
+            "text_opacity":                round(text_opacity_var.get(), 2),
         })
         save_customizations(custom)
         messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
@@ -2240,6 +2288,8 @@ def main():
             hide_method_var.set(_HIDE_METHOD_DISPLAY.get(
                 custom.get("hide_method", "withdraw"),
                 "Withdraw (recommended)"))
+            bg_opacity_var.set(custom.get("background_opacity", 1.0))
+            text_opacity_var.set(custom.get("text_opacity", 1.0))
             order[:] = custom["text_order"]
             for k, var in check_vars.items():
                 var.set(custom["text_enabled"].get(k, True))
