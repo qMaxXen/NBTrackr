@@ -1296,6 +1296,11 @@ def generate_custom_pinned_image():
         blind_resp      = dict(status["blind_resp"])
         info_resp       = dict(status["info_resp"])
 
+    if custom == _last_custom and boat_resp == _last_boat and stronghold_resp == _last_stronghold and _window_visible:
+        return
+
+    _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
+
     if not stronghold_resp:
         _schedule(clear_overlay_image)
         return
@@ -1524,11 +1529,6 @@ def generate_custom_pinned_image():
             else:
                 _schedule(clear_overlay_image)
         return
-
-    if custom == _last_custom and boat_resp == _last_boat and stronghold_resp == _last_stronghold and _window_visible:
-        return
-
-    _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
 
     preds      = stronghold_resp.get("predictions", [])
     eye_throws = stronghold_resp.get("eyeThrows", [])
