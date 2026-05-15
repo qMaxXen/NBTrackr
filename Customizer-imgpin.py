@@ -20,7 +20,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "overworld_coords_format": "four_four",
     "angle_display_mode": "angle_and_change",
     "show_angle_adjustment_count": True,
-    "show_angle_error": False,
+    "show_angle_error": True,
     "show_overlay_header": True,
     "show_coords_based_on_dimension": False,
     "show_boat_icon": True,
