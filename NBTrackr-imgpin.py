@@ -33,6 +33,9 @@ _last_custom = None
 _last_boat = None
 _last_stronghold = None
 _last_blind = None
+_last_show_until = 0
+_last_blind_resp = None
+_last_info_resp = None
 _cached_customizations = None
 
 _last_custom_mtime = 0
@@ -1244,7 +1247,7 @@ def _render_nb_failed_standalone(font_size, bg_opacity=1.0, text_opacity=1.0):
 
 
 def generate_custom_pinned_image():
-    global _last_custom, _last_boat, _last_stronghold, _last_blind
+    global _last_custom, _last_boat, _last_stronghold, _last_blind, _last_show_until, _last_blind_resp, _last_info_resp
 
     global _cached_customizations, _last_custom_mtime
     try:
@@ -1295,11 +1298,19 @@ def generate_custom_pinned_image():
         stronghold_resp = dict(status["stronghold_resp"])
         blind_resp      = dict(status["blind_resp"])
         info_resp       = dict(status["info_resp"])
+        show_until      = status.get("showUntil", 0)
 
-    if custom == _last_custom and boat_resp == _last_boat and stronghold_resp == _last_stronghold and _window_visible:
+    if (custom == _last_custom and 
+        boat_resp == _last_boat and 
+        stronghold_resp == _last_stronghold and 
+        blind_resp == _last_blind_resp and
+        info_resp == _last_info_resp and
+        _window_visible and 
+        show_until == _last_show_until):
         return
 
-    _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
+    _last_custom, _last_boat, _last_stronghold, _last_show_until, _last_blind_resp, _last_info_resp = \
+        custom, boat_resp, stronghold_resp, show_until, blind_resp, info_resp
 
     if not stronghold_resp:
         _schedule(clear_overlay_image)
