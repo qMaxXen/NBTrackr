@@ -303,7 +303,7 @@ def generate_default_pinned_image():
                  int(show_until * 10) if show_until != float("inf") else sys.maxsize)
     if (cache_key == _last_default_stronghold and
             boat_resp == _last_default_boat and
-            _window_visible):
+            (HEADLESS or _window_visible)):
         return
 
     _last_default_stronghold = cache_key
@@ -1323,7 +1323,7 @@ def generate_custom_pinned_image():
         stronghold_resp == _last_stronghold and 
         blind_resp == _last_blind_resp and
         info_resp == _last_info_resp and
-        _window_visible and 
+        (HEADLESS or _window_visible) and 
         show_until == _last_show_until):
         return
 
