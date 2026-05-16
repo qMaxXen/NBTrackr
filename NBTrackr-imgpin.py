@@ -883,11 +883,9 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
 
     img_h = main_h + throw_h
 
-    # Create image with opacity-aware background
     img  = Image.new("RGBA", (img_w, img_h), _NB_ROW_BG)
     draw = ImageDraw.Draw(img)
 
-    # New header bar
     draw.rectangle([0, 0, img_w - 1, new_header_h - 1], fill=_NEW_HEADER_BG)
     nh_text_x = CELL_PAD_MAIN + 4
     nh_text_y = (new_header_h - th(new_header_font)) // 2
@@ -1019,7 +1017,6 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
                     draw.text((bx + tw(base_str), text_y), dir_part, font=body_font, fill=dir_col)
                 x += cw
 
-    # Info messages
     if _display_info_messages:
         info_area_start_y = row_area_y + num_display_rows * _row_slot
 
@@ -1270,8 +1267,29 @@ def generate_custom_pinned_image():
     text_rgb = hex_to_rgb(text_hex, fallback=(0, 0, 0))
     bg_opacity   = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
     text_opacity = max(0.0, min(1.0, float(custom.get("text_opacity", 1.0))))
+    text_outline_enabled = bool(custom.get("text_outline_enabled", False))
+    text_outline_color_hex = custom.get("text_outline_color", "#000000")
+    text_outline_rgb = hex_to_rgb(text_outline_color_hex, (0, 0, 0))
+    try:
+        text_outline_width = int(custom.get("text_outline_width", 2))
+        text_outline_width = max(1, min(10, text_outline_width))
+    except Exception:
+        text_outline_width = 2
+
     bg_rgba    = (bg_rgb[0], bg_rgb[1], bg_rgb[2], int(bg_opacity * 255))
     text_rgba  = (*text_rgb, int(text_opacity * 255))
+    outline_rgba = (*text_outline_rgb, int(text_opacity * 255))
+
+    stroke_kwargs = {}
+    stroke_width_kwargs = {}
+    if text_outline_enabled:
+        stroke_kwargs = {
+            "stroke_width": text_outline_width,
+            "stroke_fill":  outline_rgba,
+        }
+        stroke_width_kwargs = {
+            "stroke_width": text_outline_width,
+        }
     show_boat_icon     = custom.get("show_boat_icon", False)
     show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
     show_error_message = custom.get("show_error_message", False)
@@ -1419,11 +1437,11 @@ def generate_custom_pinned_image():
                     font = ImageFont.load_default()
 
             dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-            w_line1_pre  = dummy.textbbox((0, 0), line1_pre,  font=font)[2]
-            w_line1_eval = dummy.textbbox((0, 0), line1_eval, font=font)[2]
-            w_line2_pct  = dummy.textbbox((0, 0), highroll_pct_text, font=font)[2]
-            w_line2_post = dummy.textbbox((0, 0), line2_post, font=font)[2]
-            w_line3      = dummy.textbbox((0, 0), line3,      font=font)[2]
+            w_line1_pre  = dummy.textbbox((0, 0), line1_pre,  font=font, **stroke_width_kwargs)[2]
+            w_line1_eval = dummy.textbbox((0, 0), line1_eval, font=font, **stroke_width_kwargs)[2]
+            w_line2_pct  = dummy.textbbox((0, 0), highroll_pct_text, font=font, **stroke_width_kwargs)[2]
+            w_line2_post = dummy.textbbox((0, 0), line2_post, font=font, **stroke_width_kwargs)[2]
+            w_line3      = dummy.textbbox((0, 0), line3,      font=font, **stroke_width_kwargs)[2]
             max_w        = max(w_line1_pre + w_line1_eval, w_line2_pct + w_line2_post, w_line3)
 
             ascent, descent = font.getmetrics()
@@ -1436,13 +1454,13 @@ def generate_custom_pinned_image():
             eval_color_rgba = (*blind_evaluation_color(evaluation), int(text_opacity * 255))
 
             x, y = pad, 10
-            draw.text((x, y), line1_pre, font=font, fill=text_rgba)
-            draw.text((x + w_line1_pre, y), line1_eval, font=font, fill=eval_color_rgba)
+            draw.text((x, y), line1_pre, font=font, fill=text_rgba, **stroke_kwargs)
+            draw.text((x + w_line1_pre, y), line1_eval, font=font, fill=eval_color_rgba, **stroke_kwargs)
             x = pad; y += line_h
-            draw.text((x, y), highroll_pct_text, font=font, fill=eval_color_rgba)
-            draw.text((x + w_line2_pct, y), line2_post, font=font, fill=text_rgba)
+            draw.text((x, y), highroll_pct_text, font=font, fill=eval_color_rgba, **stroke_kwargs)
+            draw.text((x + w_line2_pct, y), line2_post, font=font, fill=text_rgba, **stroke_kwargs)
             y += line_h
-            draw.text((pad, y), line3, font=font, fill=text_rgba)
+            draw.text((pad, y), line3, font=font, fill=text_rgba, **stroke_kwargs)
 
             try:
                 img.save(IMAGE_PATH)
@@ -1481,7 +1499,7 @@ def generate_custom_pinned_image():
                 font = ImageFont.load_default()
 
         dummy    = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        bbox     = dummy.textbbox((0, 0), text, font=font)
+        bbox     = dummy.textbbox((0, 0), text, font=font, **stroke_kwargs)
         text_w   = bbox[2] - bbox[0]
         text_h   = bbox[3] - bbox[1]
         offset_x = bbox[0]
@@ -1489,7 +1507,7 @@ def generate_custom_pinned_image():
         pad      = 10
         img      = Image.new("RGBA", (text_w + 2 * pad, text_h + 2 * pad), bg_rgba)
         draw     = ImageDraw.Draw(img)
-        draw.text((pad - offset_x, pad - offset_y), text, font=font, fill=text_rgba)
+        draw.text((pad - offset_x, pad - offset_y), text, font=font, fill=text_rgba, **stroke_kwargs)
         try:
             img.save(IMAGE_PATH)
         except Exception as e:
@@ -1710,14 +1728,16 @@ def generate_custom_pinned_image():
             txt = val[0] if isinstance(val, tuple) else str(val)
         elif kind in ("coords", "nether_coords_val"):
             cx_v, cz_v = val
-            txt = f"({cx_v}, {cz_v})"
+            parts = ["(", str(cx_v), ", ", str(cz_v), ")"]
+            total = sum(dummy.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2] for p in parts)
+            return total + 14, f"({cx_v}, {cz_v})"
         elif kind == "angle_change":
             arrow, num  = val
             full_change = f"({arrow} {num})"
-            return dummy.textbbox((0, 0), full_change, font=font)[2] + 14, full_change
+            return dummy.textbbox((0, 0), full_change, font=font, **stroke_width_kwargs)[2] + 14, full_change
         else:
             txt = str(val)
-        return dummy.textbbox((0, 0), txt, font=font)[2] + 14, txt
+        return dummy.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[2] + 14, txt
 
     col_widths = []
     for parts, _plink in lines:
@@ -1766,7 +1786,7 @@ def generate_custom_pinned_image():
             hdr_txt = HEADER_LABELS.get(key, "")
             if not hdr_txt:
                 continue
-            tw_val = draw.textbbox((0, 0), hdr_txt, font=font)[2]
+            tw_val = draw.textbbox((0, 0), hdr_txt, font=font, **stroke_width_kwargs)[2]
             if key == "angle" and angle_display_mode in ("angle_and_change",):
                 change_slot = slots[-1]
                 if change_slot < len(col_x) and change_slot < len(col_widths):
@@ -1777,7 +1797,7 @@ def generate_custom_pinned_image():
                 span_start = col_x[first_slot]
                 span_end   = col_x[last_slot] + col_widths[last_slot]
                 hx         = span_start + (span_end - span_start - tw_val) // 2
-            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgba)
+            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgba, **stroke_kwargs)
 
     for row, (parts, _portal_link) in enumerate(lines):
         y = 5 + header_h + row * line_h
@@ -1796,7 +1816,7 @@ def generate_custom_pinned_image():
             col_w    = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
 
             def _cx(txt):
-                tw_v = draw.textbbox((0, 0), txt, font=font)[2]
+                tw_v = draw.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[2]
                 return col_left + (col_w - tw_v) // 2
 
             if kind == "certainty":
@@ -1806,7 +1826,7 @@ def generate_custom_pinned_image():
                     fill = (*certainty_color(pct), int(text_opacity * 255))
                 except Exception:
                     fill = text_rgba
-                draw.text((_cx(txt), y), txt, font=font, fill=fill)
+                draw.text((_cx(txt), y), txt, font=font, fill=fill, **stroke_kwargs)
 
             elif kind == "angle_change":
                 arrow, num = val
@@ -1816,24 +1836,26 @@ def generate_custom_pinned_image():
                     pass
                 fill        = (*gradient_color(_last_turn_pct[0]), int(text_opacity * 255))
                 full_change = f"({arrow} {num})"
-                cw_         = draw.textbbox((0, 0), full_change, font=font)[2]
-                draw.text((col_left + (col_w - cw_) // 2, y), full_change, font=font, fill=fill)
+                cw_         = draw.textbbox((0, 0), full_change, font=font, **stroke_width_kwargs)[2]
+                draw.text((col_left + (col_w - cw_) // 2, y), full_change, font=font, fill=fill, **stroke_kwargs)
 
             elif kind == "distance":
                 txt = val[0] if isinstance(val, tuple) else str(val)
-                draw.text((_cx(txt), y), txt, font=font, fill=text_rgba)
+                draw.text((_cx(txt), y), txt, font=font, fill=text_rgba, **stroke_kwargs)
 
             elif kind == "coords":
                 cx_v, cz_v = val
                 x_str = str(cx_v); z_str = str(cz_v)
                 x_fill = (*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cx_v < 0 else text_rgba
                 z_fill = (*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cz_v < 0 else text_rgba
-                full_txt = f"({cx_v}, {cz_v})"
-                bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                for part_txt, part_fill in [("(", text_rgba), (x_str, x_fill), (", ", text_rgba),
-                                             (z_str, z_fill), (")", text_rgba)]:
-                    draw.text((bx, y), part_txt, font=font, fill=part_fill)
-                    bx += draw.textbbox((0, 0), part_txt, font=font)[2]
+                _coord_parts = [("(", text_rgba), (x_str, x_fill), (", ", text_rgba),
+                                 (z_str, z_fill), (")", text_rgba)]
+                _coord_total_w = sum(draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2]
+                                     for p, _ in _coord_parts)
+                bx = col_left + (col_w - _coord_total_w) // 2
+                for part_txt, part_fill in _coord_parts:
+                    draw.text((bx, y), part_txt, font=font, fill=part_fill, **stroke_kwargs)
+                    bx += draw.textbbox((0, 0), part_txt, font=font, **stroke_width_kwargs)[2]
 
             elif kind == "nether_coords_val":
                 cx_v, cz_v = val
@@ -1846,16 +1868,18 @@ def generate_custom_pinned_image():
                 z_fill = ((*portal_nether_rgb, int(text_opacity * 255)) if _is_portal
                           else ((*neg_coords_rgb, int(text_opacity * 255)) if neg_coords_enabled and cz_v < 0
                                 else text_rgba))
-                full_txt = f"({cx_v}, {cz_v})"
-                bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                for part_txt, part_fill in [("(", punct_fill), (x_str, x_fill), (", ", punct_fill),
-                                             (z_str, z_fill), (")", punct_fill)]:
-                    draw.text((bx, y), part_txt, font=font, fill=part_fill)
-                    bx += draw.textbbox((0, 0), part_txt, font=font)[2]
+                _nether_parts = [("(", punct_fill), (x_str, x_fill), (", ", punct_fill),
+                                  (z_str, z_fill), (")", punct_fill)]
+                _nether_total_w = sum(draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2]
+                                      for p, _ in _nether_parts)
+                bx = col_left + (col_w - _nether_total_w) // 2
+                for part_txt, part_fill in _nether_parts:
+                    draw.text((bx, y), part_txt, font=font, fill=part_fill, **stroke_kwargs)
+                    bx += draw.textbbox((0, 0), part_txt, font=font, **stroke_width_kwargs)[2]
 
             else:
                 txt = str(val)
-                draw.text((_cx(txt), y), txt, font=font, fill=text_rgba)
+                draw.text((_cx(txt), y), txt, font=font, fill=text_rgba, **stroke_kwargs)
 
     actual_left = actual_right = None
     for parts, _plink_last in lines[-1:]:
@@ -1898,33 +1922,33 @@ def generate_custom_pinned_image():
             row_y = base_y + overlay_header_h + oi * (small_line_h - 2) - 2
             if oi < len(adj_count_overlays):
                 angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
-                angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
-                count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2] if count_txt else 0
+                angle_w = draw.textbbox((0, 0), angle_txt, font=small_font, **stroke_width_kwargs)[2]
+                count_w = draw.textbbox((0, 0), count_txt, font=small_font, **stroke_width_kwargs)[2] if count_txt else 0
                 total_w = angle_w + count_w
                 adj_x   = actual_right - total_w if oi == 0 else first_adj_x + (first_adj_total_w - total_w) // 2
                 if oi == 0: first_adj_x = adj_x; first_adj_total_w = total_w
-                draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgba)
+                draw.text((adj_x, row_y), angle_txt, font=small_font, fill=text_rgba, **stroke_kwargs)
                 if count_txt:
                     base_color = ADJ_COUNT_POSITIVE if (adj_raw is None or adj_raw >= 0) else ADJ_COUNT_NEGATIVE
                     adj_fill = (*base_color, int(text_opacity * 255))
-                    draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill)
+                    draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=adj_fill, **stroke_kwargs)
             if oi < len(angle_error_overlays):
                 err_txt   = angle_error_overlays[oi][0]
-                err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font)[2]
+                err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font, **stroke_width_kwargs)[2]
                 err_x     = actual_left if oi == 0 else first_err_x + (first_err_w - err_txt_w) // 2
                 if oi == 0: first_err_x = err_x; first_err_w = err_txt_w
-                draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgba)
+                draw.text((err_x, row_y), err_txt, font=small_font, fill=text_rgba, **stroke_kwargs)
 
         if show_overlay_header and n_overlay_rows > 0:
             hdr_y = base_y - 2
             if angle_error_overlays and first_err_x is not None and first_err_w is not None:
-                w_e = draw.textbbox((0, 0), "Error", font=small_font)[2]
+                w_e = draw.textbbox((0, 0), "Error", font=small_font, **stroke_width_kwargs)[2]
                 draw.text((first_err_x + (first_err_w - w_e) // 2, hdr_y), "Error",
-                          font=small_font, fill=text_rgba)
+                          font=small_font, fill=text_rgba, **stroke_kwargs)
             if adj_count_overlays and first_adj_x is not None and first_adj_total_w is not None:
-                w_a = draw.textbbox((0, 0), "Angle", font=small_font)[2]
+                w_a = draw.textbbox((0, 0), "Angle", font=small_font, **stroke_width_kwargs)[2]
                 draw.text((first_adj_x + (first_adj_total_w - w_a) // 2, hdr_y), "Angle",
-                          font=small_font, fill=text_rgba)
+                          font=small_font, fill=text_rgba, **stroke_kwargs)
 
     tmp = IMAGE_PATH + ".tmp.png"
     try:

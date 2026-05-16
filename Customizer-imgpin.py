@@ -34,6 +34,9 @@ DEFAULT_CUSTOMIZATIONS = {
     "font_size": 18,
     "background_color": "#000000",
     "text_color": "#FFFFFF",
+    "text_outline_enabled": False,
+    "text_outline_color": "#000000",
+    "text_outline_width": 2,
     "negative_coords_color_enabled": True,
     "negative_coords_color": "#BA6669",
     "portal_nether_color_enabled": True,
@@ -711,6 +714,23 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     bg_opacity   = settings.get("background_opacity", 1.0)
     text_opacity = settings.get("text_opacity", 1.0)
 
+    text_outline_enabled = settings.get("text_outline_enabled", False)
+    text_outline_hex     = settings.get("text_outline_color", "#000000")
+    text_outline_rgb     = _hex_to_rgb(text_outline_hex, (0, 0, 0))
+    text_outline_width   = settings.get("text_outline_width", 2)
+    outline_rgba         = (*text_outline_rgb, int(text_opacity * 255))
+
+    stroke_kwargs = {}
+    stroke_width_kwargs = {}
+    if text_outline_enabled:
+        stroke_kwargs = {
+            "stroke_width": text_outline_width,
+            "stroke_fill":  outline_rgba,
+        }
+        stroke_width_kwargs = {
+            "stroke_width": text_outline_width,
+        }
+
     def _bc(c): return (*c[:3], int(bg_opacity * 255))
     def _tc(c): return (*c[:3], int(text_opacity * 255))
     bg_rgba     = _bc(bg_rgb)
@@ -833,7 +853,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
     if not lines:
         img = Image.new("RGBA", (200, 40), bg_rgba)
         draw = ImageDraw.Draw(img)
-        draw.text((10, 10), "(nothing to show)", font=font, fill=_tc(text_rgb))
+        draw.text((10, 10), "(nothing to show)", font=font, fill=_tc(text_rgb), **stroke_kwargs)
         return img
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
@@ -843,14 +863,15 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             txt = val[0]
         elif kind in ("coords", "nether_coords_val"):
             cx_v, cz_v = val
-            txt = f"({cx_v}, {cz_v})"
+            _parts = ["(", str(cx_v), ", ", str(cz_v), ")"]
+            return sum(dummy.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2] for p in _parts) + 14
         elif kind == "angle_change":
             full_change = f"({val[0]} {val[1]})"
-            return dummy.textbbox((0, 0), full_change, font=font)[2] + 14
+            return dummy.textbbox((0, 0), full_change, font=font, **stroke_width_kwargs)[2] + 14
         else:
             txt = str(val)
         gap = 14
-        return dummy.textbbox((0, 0), txt, font=font)[2] + gap
+        return dummy.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[2] + gap
 
     col_widths = []
     for parts_tuple, _plink in lines:
@@ -914,7 +935,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             hdr_txt = HEADER_LABELS.get(key, "")
             if not hdr_txt:
                 continue
-            tw_hdr = draw.textbbox((0, 0), hdr_txt, font=font)[2]
+            tw_hdr = draw.textbbox((0, 0), hdr_txt, font=font, **stroke_width_kwargs)[2]
             if key == "angle" and angle_display_mode in ("angle_and_change",):
                 change_slot = slots[-1]
                 if change_slot < len(col_x) and change_slot < len(col_widths):
@@ -930,7 +951,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 span_end = col_x[last_slot] + col_widths[last_slot]
                 span_w = span_end - span_start
                 hx = span_start + (span_w - tw_hdr) // 2
-            draw.text((hx, 5), hdr_txt, font=font, fill=_tc(text_rgb))
+            draw.text((hx, 5), hdr_txt, font=font, fill=_tc(text_rgb), **stroke_kwargs)
 
     _last_turn_pct = [0.0]
 
@@ -951,7 +972,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             col_w    = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
 
             def _cx(txt):
-                tw = draw.textbbox((0, 0), txt, font=font)[2]
+                tw = draw.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[2]
                 return col_left + (col_w - tw) // 2
 
             if kind == "certainty":
@@ -960,7 +981,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     fill = _certainty_color(float(txt.rstrip("%")))
                 except Exception:
                     fill = text_rgb
-                draw.text((_cx(txt), y), txt, font=font, fill=_tc(fill))
+                draw.text((_cx(txt), y), txt, font=font, fill=_tc(fill), **stroke_kwargs)
 
             elif kind == "angle_change":
                 arrow, num = val
@@ -970,9 +991,9 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     pass
                 fill = _gradient_color(_last_turn_pct[0])
                 full_change = f"({arrow} {num})"
-                cw_ = draw.textbbox((0, 0), full_change, font=font)[2]
+                cw_ = draw.textbbox((0, 0), full_change, font=font, **stroke_width_kwargs)[2]
                 col_start = col_left + (col_w - cw_) // 2
-                draw.text((col_start, y), full_change, font=font, fill=_tc(fill))
+                draw.text((col_start, y), full_change, font=font, fill=_tc(fill), **stroke_kwargs)
 
             elif kind == "distance":
                 try:
@@ -980,7 +1001,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 except Exception:
                     txt = str(val)
                     dval = None
-                draw.text((_cx(txt), y), txt, font=font, fill=_tc(text_rgb))
+                draw.text((_cx(txt), y), txt, font=font, fill=_tc(text_rgb), **stroke_kwargs)
 
             elif kind == "coords":
                 cx_v, cz_v = val
@@ -988,17 +1009,12 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 z_str = str(cz_v)
                 x_fill = (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb)
                 z_fill = (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb)
-                full_txt = f"({cx_v}, {cz_v})"
-                bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                draw.text((bx, y), "(", font=font, fill=_tc(text_rgb))
-                bx += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((bx, y), x_str, font=font, fill=_tc(x_fill))
-                bx += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((bx, y), ", ", font=font, fill=_tc(text_rgb))
-                bx += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((bx, y), z_str, font=font, fill=_tc(z_fill))
-                bx += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((bx, y), ")", font=font, fill=_tc(text_rgb))
+                _parts = [("(", text_rgb), (x_str, x_fill), (", ", text_rgb), (z_str, z_fill), (")", text_rgb)]
+                _total_w = sum(draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2] for p, _ in _parts)
+                bx = col_left + (col_w - _total_w) // 2
+                for pt, pc in _parts:
+                    draw.text((bx, y), pt, font=font, fill=_tc(pc), **stroke_kwargs)
+                    bx += draw.textbbox((0, 0), pt, font=font, **stroke_width_kwargs)[2]
 
             elif kind == "nether_coords_val":
                 cx_v, cz_v = val
@@ -1010,21 +1026,16 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                           else (neg_coords_rgb if neg_coords_enabled and cx_v < 0 else text_rgb))
                 z_fill = (portal_dist_rgb if _is_portal
                           else (neg_coords_rgb if neg_coords_enabled and cz_v < 0 else text_rgb))
-                full_txt = f"({cx_v}, {cz_v})"
-                bx = col_left + (col_w - draw.textbbox((0, 0), full_txt, font=font)[2]) // 2
-                draw.text((bx, y), "(", font=font, fill=_tc(punct_fill))
-                bx += draw.textbbox((0, 0), "(", font=font)[2]
-                draw.text((bx, y), x_str, font=font, fill=_tc(x_fill))
-                bx += draw.textbbox((0, 0), x_str, font=font)[2]
-                draw.text((bx, y), ", ", font=font, fill=_tc(punct_fill))
-                bx += draw.textbbox((0, 0), ", ", font=font)[2]
-                draw.text((bx, y), z_str, font=font, fill=_tc(z_fill))
-                bx += draw.textbbox((0, 0), z_str, font=font)[2]
-                draw.text((bx, y), ")", font=font, fill=_tc(punct_fill))
+                _parts = [("(", punct_fill), (x_str, x_fill), (", ", punct_fill), (z_str, z_fill), (")", punct_fill)]
+                _total_w = sum(draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2] for p, _ in _parts)
+                bx = col_left + (col_w - _total_w) // 2
+                for pt, pc in _parts:
+                    draw.text((bx, y), pt, font=font, fill=_tc(pc), **stroke_kwargs)
+                    bx += draw.textbbox((0, 0), pt, font=font, **stroke_width_kwargs)[2]
 
             else:
                 txt = str(val)
-                draw.text((_cx(txt), y), txt, font=font, fill=_tc(text_rgb))
+                draw.text((_cx(txt), y), txt, font=font, fill=_tc(text_rgb), **stroke_kwargs)
 
     actual_left = None
     actual_right = None
@@ -1040,10 +1051,19 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             elif kind in ("coords", "nether_coords_val"):
                 cx_v, cz_v = val
                 txt = f"({cx_v}, {cz_v})"
+                _parts = ["(", str(cx_v), ", ", str(cz_v), ")"]
+                txt_w = sum(draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2] for p in _parts)
+                centered_start = c_left + (c_w - txt_w) // 2
+                centered_end = centered_start + txt_w
+                if actual_left is None or centered_start < actual_left:
+                    actual_left = centered_start
+                if actual_right is None or centered_end > actual_right:
+                    actual_right = centered_end
+                continue
             elif kind == "angle_change":
                 arrow, num = val
-                arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 4 + draw.textbbox((0, 0), num, font=font)[2]
+                arrow_w = draw.textbbox((0, 0), arrow, font=font, **stroke_width_kwargs)[2]
+                total_w = arrow_w + 4 + draw.textbbox((0, 0), num, font=font, **stroke_width_kwargs)[2]
                 centered_start = c_left + (c_w - total_w) // 2
                 centered_end = centered_start + total_w
                 if actual_left is None or centered_start < actual_left:
@@ -1053,7 +1073,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                 continue
             else:
                 txt = str(val)
-            txt_w = draw.textbbox((0, 0), txt, font=font)[2]
+            txt_w = draw.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[2]
             centered_start = c_left + (c_w - txt_w) // 2
             centered_end = centered_start + txt_w
             if actual_left is None or centered_start < actual_left:
@@ -1084,9 +1104,9 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
         if oi < len(adj_count_overlays):
             angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
 
-            angle_w = draw.textbbox((0, 0), angle_txt, font=small_font)[2]
+            angle_w = draw.textbbox((0, 0), angle_txt, font=small_font, **stroke_width_kwargs)[2]
             if count_txt is not None:
-                count_w = draw.textbbox((0, 0), count_txt, font=small_font)[2]
+                count_w = draw.textbbox((0, 0), count_txt, font=small_font, **stroke_width_kwargs)[2]
             else:
                 count_w = 0
 
@@ -1099,33 +1119,33 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             else:
                 adj_x = first_adj_x + (first_adj_total_w - total_w) // 2
 
-            draw.text((adj_x, row_y), angle_txt, font=small_font, fill=_tc(text_rgb))
+            draw.text((adj_x, row_y), angle_txt, font=small_font, fill=_tc(text_rgb), **stroke_kwargs)
 
             if count_txt is not None:
                 adj_fill = ADJ_POS if (adj_raw is None or adj_raw >= 0) else ADJ_NEG
-                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=_tc(adj_fill))
+                draw.text((adj_x + angle_w, row_y), count_txt, font=small_font, fill=_tc(adj_fill), **stroke_kwargs)
 
         if oi < len(angle_error_overlays):
             err_txt = angle_error_overlays[oi][0]
-            err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font)[2]
+            err_txt_w = draw.textbbox((0, 0), err_txt, font=small_font, **stroke_width_kwargs)[2]
             if oi == 0:
                 err_x = actual_left
                 first_err_x = err_x
                 first_err_w = err_txt_w
             else:
                 err_x = first_err_x + (first_err_w - err_txt_w) // 2
-            draw.text((err_x, row_y), err_txt, font=small_font, fill=_tc(text_rgb))
+            draw.text((err_x, row_y), err_txt, font=small_font, fill=_tc(text_rgb), **stroke_kwargs)
 
     if show_overlay_header and n_overlay_rows > 0:
         hdr_y = base_y - 2
         if angle_error_overlays and first_err_x is not None and first_err_w is not None:
-            err_hdr_w = draw.textbbox((0, 0), "Error", font=small_font)[2]
+            err_hdr_w = draw.textbbox((0, 0), "Error", font=small_font, **stroke_width_kwargs)[2]
             err_hdr_x = first_err_x + (first_err_w - err_hdr_w) // 2
-            draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=_tc(text_rgb))
+            draw.text((err_hdr_x, hdr_y), "Error", font=small_font, fill=_tc(text_rgb), **stroke_kwargs)
         if adj_count_overlays and first_adj_x is not None and first_adj_total_w is not None:
-            adj_hdr_w = draw.textbbox((0, 0), "Angle", font=small_font)[2]
+            adj_hdr_w = draw.textbbox((0, 0), "Angle", font=small_font, **stroke_width_kwargs)[2]
             adj_hdr_x = first_adj_x + (first_adj_total_w - adj_hdr_w) // 2
-            draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=_tc(text_rgb))
+            draw.text((adj_hdr_x, hdr_y), "Angle", font=small_font, fill=_tc(text_rgb), **stroke_kwargs)
     return img
 
 PREVIEW_BLIND = {
@@ -1146,6 +1166,23 @@ def render_blind_preview(settings: dict) -> Image.Image:
 
     bg_opacity   = settings.get("background_opacity", 1.0)
     text_opacity = settings.get("text_opacity", 1.0)
+
+    text_outline_enabled = settings.get("text_outline_enabled", False)
+    text_outline_hex     = settings.get("text_outline_color", "#000000")
+    text_outline_rgb     = _hex_to_rgb(text_outline_hex, (0, 0, 0))
+    text_outline_width   = settings.get("text_outline_width", 2)
+    outline_rgba         = (*text_outline_rgb, int(text_opacity * 255))
+
+    stroke_kwargs = {}
+    stroke_width_kwargs = {}
+    if text_outline_enabled:
+        stroke_kwargs = {
+            "stroke_width": text_outline_width,
+            "stroke_fill":  outline_rgba,
+        }
+        stroke_width_kwargs = {
+            "stroke_width": text_outline_width,
+        }
 
     def _bc(c): return (*c[:3], int(bg_opacity * 255))
     def _tc(c): return (*c[:3], int(text_opacity * 255))
@@ -1175,7 +1212,7 @@ def render_blind_preview(settings: dict) -> Image.Image:
     line3          = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
 
     dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    def tw(t): return dummy.textbbox((0, 0), t, font=font)[2]
+    def tw(t): return dummy.textbbox((0, 0), t, font=font, **stroke_width_kwargs)[2]
 
     max_w = max(tw(line1_pre) + tw(line1_eval),
                 tw(highroll_txt) + tw(line2_post),
@@ -1186,15 +1223,15 @@ def render_blind_preview(settings: dict) -> Image.Image:
     draw = ImageDraw.Draw(img)
 
     x, y = pad, 10
-    draw.text((x, y), line1_pre, font=font, fill=_tc(text_rgb))
-    draw.text((x + tw(line1_pre), y), line1_eval, font=font, fill=_tc(eval_color))
+    draw.text((x, y), line1_pre, font=font, fill=_tc(text_rgb), **stroke_kwargs)
+    draw.text((x + tw(line1_pre), y), line1_eval, font=font, fill=_tc(eval_color), **stroke_kwargs)
 
     y += line_h
-    draw.text((pad, y), highroll_txt, font=font, fill=_tc(eval_color))
-    draw.text((pad + tw(highroll_txt), y), line2_post, font=font, fill=_tc(text_rgb))
+    draw.text((pad, y), highroll_txt, font=font, fill=_tc(eval_color), **stroke_kwargs)
+    draw.text((pad + tw(highroll_txt), y), line2_post, font=font, fill=_tc(text_rgb), **stroke_kwargs)
 
     y += line_h
-    draw.text((pad, y), line3, font=font, fill=_tc(text_rgb))
+    draw.text((pad, y), line3, font=font, fill=_tc(text_rgb), **stroke_kwargs)
 
     return img
 
@@ -1468,6 +1505,9 @@ def _collect_eye_settings(vars_dict: dict) -> dict:
     return {
         "background_color":              vars_dict["bg_var"].get(),
         "text_color":                    vars_dict["text_var"].get(),
+        "text_outline_enabled":          vars_dict["text_outline_enabled_var"].get(),
+        "text_outline_color":            vars_dict["text_outline_color_var"].get(),
+        "text_outline_width":            vars_dict["text_outline_width_var"].get(),
         "negative_coords_color_enabled": vars_dict["neg_coords_enabled_var"].get(),
         "negative_coords_color":         vars_dict["neg_coords_color_var"].get(),
         "portal_nether_color_enabled": vars_dict["portal_dist_enabled_var"].get(),
@@ -1520,6 +1560,9 @@ def _collect_blind_settings(vars_dict: dict) -> dict:
     return {
         "background_color": vars_dict["bg_var"].get(),
         "text_color":       vars_dict["text_var"].get(),
+        "text_outline_enabled": vars_dict["text_outline_enabled_var"].get(),
+        "text_outline_color":   vars_dict["text_outline_color_var"].get(),
+        "text_outline_width":   vars_dict["text_outline_width_var"].get(),
         "font_name":        font_name,
         "font_size":        font_size,
         "background_opacity": vars_dict["bg_opacity_var"].get(),
@@ -1567,7 +1610,7 @@ def open_default_preview(vars_dict: dict):
 
 def open_eye_preview(vars_dict: dict):
     win = tk.Toplevel()
-    win.title("Eye Throws Overlay — Preview")
+    win.title("Eye Throws Overlay Preview")
     win.resizable(False, False)
 
     lbl = tk.Label(win, bd=0, highlightthickness=0)
@@ -1604,7 +1647,7 @@ def open_eye_preview(vars_dict: dict):
 
 def open_default_blind_preview(vars_dict: dict = None):
     win = tk.Toplevel()
-    win.title("Default Blind Coords Overlay — Preview")
+    win.title("Default Blind Coords Overlay Preview")
     win.resizable(False, False)
 
     lbl = tk.Label(win, bd=0, highlightthickness=0)
@@ -1675,6 +1718,48 @@ def open_blind_preview(vars_dict: dict):
 
     win.protocol("WM_DELETE_WINDOW", _on_close)
     _refresh()
+
+def open_text_outline_settings(enabled_var, color_var, width_var):
+    win = tk.Toplevel()
+    win.title("Text Outline Settings")
+    win.resizable(False, False)
+    win.grab_set()
+
+    g = tk.Frame(win)
+    g.pack(padx=20, pady=15, fill="x")
+
+    f_toggle = tk.Frame(g); f_toggle.pack(fill="x", pady=5)
+    tk.Label(f_toggle, text="Text outline", width=18, anchor="w").pack(side="left")
+    tk.Checkbutton(f_toggle, variable=enabled_var, relief="flat", bd=0).pack(side="left")
+
+    f_color = tk.Frame(g); f_color.pack(fill="x", pady=5)
+    tk.Label(f_color, text="Text outline color", width=18, anchor="w").pack(side="left")
+    color_entry = tk.Entry(f_color, textvariable=color_var, width=10)
+    color_entry.pack(side="left", padx=5)
+    color_btn = tk.Button(f_color, text="Choose", command=lambda: pick_color(color_var))
+    color_btn.pack(side="left")
+
+    f_width = tk.Frame(g); f_width.pack(fill="x", pady=5)
+    tk.Label(f_width, text="Text outline width", width=18, anchor="w").pack(side="left")
+    width_spinbox = tk.Spinbox(f_width, from_=1, to=10, textvariable=width_var, width=8)
+    width_spinbox.pack(side="left", padx=5)
+
+    def _update_sub_state(*_):
+        en = enabled_var.get()
+        st = "normal" if en else "disabled"
+        color_entry.config(state=st)
+        color_btn.config(state=st)
+        width_spinbox.config(state=st)
+
+    trace_id = enabled_var.trace_add("write", _update_sub_state)
+    _update_sub_state()
+
+    def on_close():
+        enabled_var.trace_remove("write", trace_id)
+        win.destroy()
+
+    win.protocol("WM_DELETE_WINDOW", on_close)
+    tk.Button(win, text="Close", command=on_close).pack(pady=(5, 15))
 
 def main():
     ensure_custom_file_exists()
@@ -1771,6 +1856,21 @@ def main():
     text_entry.pack(side="left", padx=5)
     text_choose_btn = tk.Button(f_text, text="Choose", command=lambda: pick_color(text_var))
     text_choose_btn.pack(side="left")
+
+    text_outline_enabled_var = tk.BooleanVar(value=custom.get("text_outline_enabled", False))
+    text_outline_color_var = tk.StringVar(
+        value=custom.get("text_outline_color", DEFAULT_CUSTOMIZATIONS["text_outline_color"]))
+    text_outline_width_var = tk.IntVar(
+        value=custom.get("text_outline_width", DEFAULT_CUSTOMIZATIONS["text_outline_width"]))
+
+    f_outline = tk.Frame(g); f_outline.pack(fill="x", pady=(2, 5))
+    tk.Label(f_outline, text="Text outline", width=26, anchor="w").pack(side="left")
+    text_outline_customize_btn = tk.Button(f_outline, text="Customize",
+                                           command=lambda: open_text_outline_settings(
+                                               text_outline_enabled_var,
+                                               text_outline_color_var,
+                                               text_outline_width_var))
+    text_outline_customize_btn.pack(side="left", padx=5)
 
     f_neg = tk.Frame(g); f_neg.pack(fill="x", pady=(2, 5))
     neg_coords_enabled_var = tk.BooleanVar(value=custom.get("negative_coords_color_enabled", False))
@@ -2106,6 +2206,9 @@ def main():
         "_HIDE_METHOD_KEY_FROM_DISPLAY": _HIDE_METHOD_KEY_FROM_DISPLAY,
         "bg_opacity_var":          bg_opacity_var,
         "text_opacity_var":        text_opacity_var,
+        "text_outline_enabled_var": text_outline_enabled_var,
+        "text_outline_color_var":   text_outline_color_var,
+        "text_outline_width_var":   text_outline_width_var,
     }
 
     def update_blind_hide_after_state(*_):
@@ -2146,6 +2249,7 @@ def main():
         bg_choose_btn.config(state=color_state)
         text_entry.config(state=color_state)
         text_choose_btn.config(state=color_state)
+        text_outline_customize_btn.config(state=color_state)
 
         _update_neg_coords_state()
 
@@ -2241,6 +2345,9 @@ def main():
                                                hide_method_var.get(), "withdraw"),
             "background_opacity":          round(bg_opacity_var.get(), 2),
             "text_opacity":                round(text_opacity_var.get(), 2),
+            "text_outline_enabled":        text_outline_enabled_var.get(),
+            "text_outline_color":          text_outline_color_var.get().strip(),
+            "text_outline_width":          text_outline_width_var.get(),
         })
         save_customizations(custom)
         messagebox.showinfo("Settings Saved", "Your settings have been saved successfully.")
@@ -2290,6 +2397,11 @@ def main():
                 "Withdraw (recommended)"))
             bg_opacity_var.set(custom.get("background_opacity", 1.0))
             text_opacity_var.set(custom.get("text_opacity", 1.0))
+            text_outline_enabled_var.set(custom.get("text_outline_enabled", False))
+            text_outline_color_var.set(custom.get("text_outline_color",
+                                                   DEFAULT_CUSTOMIZATIONS["text_outline_color"]))
+            text_outline_width_var.set(custom.get("text_outline_width",
+                                                   DEFAULT_CUSTOMIZATIONS["text_outline_width"]))
             order[:] = custom["text_order"]
             for k, var in check_vars.items():
                 var.set(custom["text_enabled"].get(k, True))
