@@ -32,7 +32,7 @@ DEFAULT_CUSTOMIZATIONS = {
     "blind_info_hide_after_enabled": False,
     "font_name": os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "LiberationSans", "LiberationSans-Bold.ttf"),
     "font_size": 18,
-    "background_color": "#000000",
+    "background_color": "#1E1E1E",
     "text_color": "#FFFFFF",
     "text_outline_enabled": False,
     "text_outline_color": "#000000",
@@ -702,7 +702,7 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
     return img
 
 def render_eye_throws_preview(settings: dict) -> Image.Image:
-    bg_hex   = settings.get("background_color", "#000000")
+    bg_hex   = settings.get("background_color", "#1E1E1E")
     text_hex = settings.get("text_color", "#FFFFFF")
     bg_rgb      = _hex_to_rgb(bg_hex, (255, 255, 255))
     text_rgb    = _hex_to_rgb(text_hex, (0, 0, 0))
@@ -1159,7 +1159,7 @@ PREVIEW_BLIND = {
 }
 
 def render_blind_preview(settings: dict) -> Image.Image:
-    bg_hex   = settings.get("background_color", "#FFFFFF")
+    bg_hex   = settings.get("background_color", "#1E1E1E")
     bg_rgb   = _hex_to_rgb(bg_hex, (255, 255, 255))
     text_hex = settings.get("text_color", "#000000")
     text_rgb = _hex_to_rgb(text_hex, (0, 0, 0))

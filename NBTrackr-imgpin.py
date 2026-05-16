@@ -1261,7 +1261,7 @@ def generate_custom_pinned_image():
         log("Failed to read customizations:", e)
         return
 
-    bg_hex   = custom.get("background_color", "#FFFFFF")
+    bg_hex   = custom.get("background_color", "#1E1E1E")
     text_hex = custom.get("text_color", "#000000")
     bg_rgb   = hex_to_rgb(bg_hex, fallback=(255, 255, 255))
     text_rgb = hex_to_rgb(text_hex, fallback=(0, 0, 0))
@@ -2204,7 +2204,7 @@ def place_window(width, height):
             pass
 
 def _render_and_apply_blank_custom_overlay(custom):
-    bg_hex = custom.get("background_color", "#FFFFFF")
+    bg_hex = custom.get("background_color", "#1E1E1E")
     bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
     bg_opacity = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
 
