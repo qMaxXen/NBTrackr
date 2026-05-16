@@ -46,13 +46,13 @@ nbtrackr --headless
 - Note that when `Use custom pinned image overlay` is disabled under the `General` tab, many settings will be grayed out, as they only apply to the custom pinned image overlay.
 
 ### General tab
-<img width="597" height="296" alt="image" src="https://github.com/user-attachments/assets/70dfed2b-2d17-4465-b71f-d0ee4158b401" />
+<img width="597" height="442" alt="image" src="https://github.com/user-attachments/assets/5d001060-e362-4e8e-96d6-7df2f93a7b04" />
 
 ### Eye Throws Overlay tab
-<img width="418" height="483" alt="image" src="https://github.com/user-attachments/assets/f0c68842-cce5-4d11-95cc-a730b434577d" />
+<img width="597" height="679" alt="image" src="https://github.com/user-attachments/assets/27ae6a82-f872-4096-b83b-a286eaa5bd66" />
 
 ### Blind Coords Overlay tab
 <img width="597" height="148" alt="image" src="https://github.com/user-attachments/assets/0f3c613f-3bd8-4493-b426-29b8917c139a" />
 
 ### Advanced tab
-<img width="597" height="173" alt="image" src="https://github.com/user-attachments/assets/ea58f03f-3972-48d7-8471-a29faf3698b2" />
+<img width="597" height="262" alt="image" src="https://github.com/user-attachments/assets/b745c015-2496-49f2-9f30-c2de3d786bff" />
