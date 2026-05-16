@@ -3,6 +3,7 @@
 ## Arguments
 - `--settings` - Opens a window to configure NBTrackr. For more information, see [Configuring Pinned Image Overlay](https://github.com/qMaxXen/NBTrackr/blob/main/FEATURES.md#configuring-pinned-image-overlay).
 - `--headless` - Makes the window not appear. The information is written to `/tmp/imgpin-overlay.png`.
+- `--lock-overlay` - Prevents the overlay window from being moved. Useful if you find yourself accidentally moving it.
 
 *Example usage:*
 ```bash
