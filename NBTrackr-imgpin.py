@@ -16,7 +16,7 @@ from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
 
 # Program Version
-APP_VERSION = "v2.5.2"
+APP_VERSION = "v2.6.0"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
