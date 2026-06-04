@@ -638,8 +638,6 @@ def _render_nb_stronghold(preds, eye_throws, player_x, player_z, h_ang,
             ox, oz = cx * 16 + 8, cz * 16 + 8
         else:
             ox, oz = cx * 16 + 4, cz * 16 + 4
-        if in_nether:
-            ox, oz = round(ox / 8), round(oz / 8)
 
         nx, nz = round((cx * 16 + 4) / 8), round((cz * 16 + 4) / 8)
         cert_pct  = cert * 100
