@@ -2380,6 +2380,9 @@ else:
 
         except Exception:
             pass
+    else:
+        window.move(0, 0)
+        save_config()
 
     label = window._label
 
