@@ -2368,6 +2368,16 @@ else:
         sx, sy = saved_pos
         try:
             window.move(sx, sy)
+
+            desktop_rect = app.desktop().geometry()
+            log(f"[Window] Desktop rect: {desktop_rect}")
+            log(f"[Window] Window rect: {window.geometry()}")
+
+            if not desktop_rect.intersects(window.geometry()):
+                print(f"Window at ({sx}, {sy}) is off-screen. Resetting to (0, 0).")
+                window.move(0, 0)
+                save_config()
+
         except Exception:
             pass
 
