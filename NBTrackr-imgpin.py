@@ -3001,6 +3001,7 @@ else:
         except Exception:
             pass
     else:
+        log("[Window] No saved position found (first launch), placing window at (0, 0)")
         window.move(0, 0)
         save_config()
 
