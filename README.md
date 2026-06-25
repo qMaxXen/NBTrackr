@@ -6,7 +6,7 @@
 > [!IMPORTANT]
 > This script works **only on Linux**.
 
-A program that displays Ninjabrain Bot's info using a pinned image overlay. It comes with two types of overlays: the default overlay shows a replica of Ninjabrain Bot's window, and a custom overlay which is a more minimal overlay with more customization options. This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
+A program that displays Ninjabrain Bot's info using a pinned image overlay. You can choose from two types of overlays: the default overlay shows a replica of Ninjabrain Bot's window, and a custom overlay which is a more minimal overlay with more customization options. This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
 
 <div align="center">
 <img src="https://github.com/user-attachments/assets/fdebfe5e-de52-45e6-b30a-76bb04703e5a" width="400"/>
