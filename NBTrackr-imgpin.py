@@ -5,8 +5,6 @@ import threading
 import time
 import requests
 import json
-import tempfile
-import tarfile
 import re
 import signal
 from datetime import datetime
@@ -14,6 +12,8 @@ from PIL import Image, ImageDraw, ImageFont
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout
 from PyQt5.QtCore import Qt, QObject, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
+from shared.colors import gradient_color, certainty_color, blind_evaluation_color, hex_to_rgb, with_alpha, format_blind_evaluation
+from core.updater import check_for_update, check_and_update
 
 # Program Version
 APP_VERSION = "v2.6.0"
@@ -72,87 +72,21 @@ def _load_advanced_settings():
 DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
 
 if DEBUG_MODE:
-
     def log(*args):
         timestamp = datetime.now().strftime("[%H:%M:%S]")
         msg = " ".join(map(str, args))
         print(f"{timestamp} {msg}")
 else:
-
     def log(*args):
         pass
-
-
-def gradient_color(angle: float):
-    if angle <= 90:
-        t = angle / 90.0
-        red = int(255 * t)
-        green = 255
-        return (red, green, 0)
-    t = (angle - 90) / 90.0
-    red = 255
-    green = int(255 * (1 - t))
-    return (red, green, 0)
-
-
-def certainty_color(pct: float):
-    pct = max(0.0, min(100.0, pct))
-    return gradient_color((100 - pct) * 1.8)
 
 
 ADJ_COUNT_POSITIVE = (117, 204, 108)
 ADJ_COUNT_NEGATIVE = (204, 110, 114)
 
 
-def blind_evaluation_color(evaluation):
-    colors = {
-        "EXCELLENT": (0, 255, 0),
-        "HIGHROLL_GOOD": (100, 255, 100),
-        "HIGHROLL_OKAY": (114, 214, 2),
-        "BAD_BUT_IN_RING": (222, 220, 3),
-        "BAD": (255, 100, 0),
-        "NOT_IN_RING": (255, 0, 0),
-    }
-    return colors.get(evaluation, (255, 255, 255))
-
-
-def format_blind_evaluation(evaluation):
-    evaluations = {
-        "EXCELLENT": "excellent",
-        "HIGHROLL_GOOD": "good for highroll",
-        "HIGHROLL_OKAY": "okay for highroll",
-        "BAD_BUT_IN_RING": "bad, but in ring",
-        "BAD": "bad",
-        "NOT_IN_RING": "not in any ring",
-    }
-    return evaluations.get(evaluation, evaluation)
-
-
-def hex_to_rgb(hexstr, fallback=(0, 0, 0)):
-    try:
-        if not isinstance(hexstr, str):
-            return fallback
-        s = hexstr.strip()
-        if s.startswith("#"):
-            s = s[1:]
-        if len(s) != 6:
-            return fallback
-        r = int(s[0:2], 16)
-        g = int(s[2:4], 16)
-        b = int(s[4:6], 16)
-        return (r, g, b)
-    except Exception:
-        return fallback
-
-
 def _strip_html(text):
     return re.sub(r"<[^>]+>", "", text)
-
-
-def _with_alpha(color, alpha_float):
-    r, g, b = color[0], color[1], color[2]
-    a = max(0, min(255, int(alpha_float * 255)))
-    return (r, g, b, a)
 
 
 # --------------------- Cache End --------------------------
@@ -732,13 +666,13 @@ def _render_nb_stronghold(
     show_angle = h_ang is not None and player_x is not None and player_z is not None
 
     def _bc(color):
-        return _with_alpha(color[:3], bg_opacity)
+        return with_alpha(color[:3], bg_opacity)
 
     def _tc(color):
-        return _with_alpha(color[:3], text_opacity)
+        return with_alpha(color[:3], text_opacity)
 
     def _tc_dyn(color):
-        return _with_alpha(color[:3], text_opacity)
+        return with_alpha(color[:3], text_opacity)
 
     _NB_ROW_BG = _bc(NB_ROW_BG)
     _NB_HEADER_BG = _bc(NB_HEADER_BG)
@@ -1569,9 +1503,9 @@ def _render_nb_failed_standalone(font_size, bg_opacity=1.0, text_opacity=1.0):
     PAD = 20
     img_w = max_w + PAD * 2
     img_h = body_h * len(lines) + PAD
-    img = Image.new("RGBA", (img_w, img_h), _with_alpha(NB_ROW_BG[:3], bg_opacity))
+    img = Image.new("RGBA", (img_w, img_h), with_alpha(NB_ROW_BG[:3], bg_opacity))
     draw = ImageDraw.Draw(img)
-    t_col = _with_alpha(NB_TEXT, text_opacity)
+    t_col = with_alpha(NB_TEXT, text_opacity)
     for i, line in enumerate(lines):
         y = PAD // 2 + i * body_h
         lw = dummy_draw.textbbox((0, 0), line, font=font)[2]
@@ -2544,32 +2478,6 @@ def generate_custom_pinned_image():
 # --------------------- END Generate custom pinned image overlay ----------------------
 
 
-def get_latest_github_release_version():
-    url = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
-    try:
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("tag_name")
-    except Exception as e:
-        if (
-            hasattr(e, "response")
-            and e.response is not None
-            and e.response.status_code == 403
-        ):
-            print("[Version Check] rate limit hit, skipping update check.")
-            return None
-        print(f"[Version Check Error] {e}")
-        return None
-
-
-def check_for_update(current_version):
-    latest_version = get_latest_github_release_version()
-    if latest_version and latest_version != current_version:
-        return latest_version
-    return None
-
-
 _window_hiding_method = None
 
 
@@ -2586,71 +2494,6 @@ def get_window_hiding_method():
     log(f"[Window] Hide method loaded from config: '{_window_hiding_method}'")
     return _window_hiding_method
 
-
-# ---------------------- AUTO UPDATER ----------------------
-
-GITHUB_API = "https://api.github.com/repos/qMaxXen/NBTrackr/releases/latest"
-
-
-def check_and_update(current_version):
-    try:
-        resp = requests.get(GITHUB_API, timeout=5)
-        resp.raise_for_status()
-        data = resp.json()
-        latest = data["tag_name"]
-        if latest == current_version:
-            return
-        asset_name = f"NBTrackr-imgpin-{latest}.tar.xz"
-        folder_name = asset_name.replace(".tar.xz", "")
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(script_dir)
-        folder_path = os.path.join(parent_dir, folder_name)
-        if os.path.exists(folder_path):
-            print(f"[Updater] Latest version ({latest}) is already downloaded.")
-            print("[Updater] Please navigate to the following folder to continue:")
-            print(f"    {folder_path}")
-            print("[Updater] Then run the script again from the new version.")
-            sys.exit(0)
-        download_url = next(
-            (
-                a["browser_download_url"]
-                for a in data["assets"]
-                if a["name"] == asset_name
-            ),
-            None,
-        )
-        if not download_url:
-            print(f"[Updater] Couldn't find asset {asset_name} in release {latest}.")
-            return
-        print(f"[Updater] Downloading {asset_name} …")
-        tmpdir = tempfile.mkdtemp()
-        archive_path = os.path.join(tmpdir, asset_name)
-        with requests.get(download_url, stream=True, timeout=10) as dl:
-            dl.raise_for_status()
-            with open(archive_path, "wb") as f:
-                for chunk in dl.iter_content(8192):
-                    f.write(chunk)
-        print(f"[Updater] Extracting to {parent_dir} …")
-        with tarfile.open(archive_path, "r:xz") as tar:
-            tar.extractall(path=parent_dir, filter=lambda tarinfo, memberpath: tarinfo)
-        os.remove(archive_path)
-        body = data.get("body", "").strip()
-        if body:
-            print("\n[Updater] What's new:")
-            print("-" * 40)
-            print(body)
-            print("-" * 40)
-        print("\n[Updater] Update completed. New version extracted to:")
-        print(f"    {folder_path}")
-        print("[Updater] To finish setup, navigate to the new folder and run:")
-        print("    chmod +x install.sh")
-        print("    ./install.sh")
-        sys.exit(0)
-    except Exception as e:
-        print(f"[Updater] Update failed: {e}")
-
-
-# ---------------------- AUTO UPDATER - END ----------------------
 
 # ---------------------- Qt Scheduler ----------------------
 
@@ -2961,7 +2804,7 @@ if __name__ == "__main__":
         choice = input("Enter choice [1/2]: ").strip()
         print()
         if choice == "2":
-            check_and_update(APP_VERSION)
+            check_and_update(APP_VERSION, os.path.dirname(os.path.abspath(__file__)))
         else:
             print("Skipping update. Continuing with current version", APP_VERSION, "\n")
 

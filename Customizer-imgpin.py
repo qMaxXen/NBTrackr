@@ -6,6 +6,7 @@ import subprocess
 import colorsys
 from tkinter import ttk, messagebox
 from PIL import Image, ImageDraw, ImageFont, ImageTk
+from shared.colors import gradient_color, certainty_color, blind_evaluation_color, hex_to_rgb, format_blind_evaluation
 
 CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 BUNDLED_FONT_DISPLAY = "LiberationSans-Bold (Bundled)"
@@ -85,55 +86,6 @@ DISPLAY_NAMES = {
     "overworld_coords": "Overworld Coords",
     "nether_coords": "Nether Coords",
 }
-
-
-def _hex_to_rgb(hexstr, fallback=(0, 0, 0)):
-    try:
-        s = hexstr.strip().lstrip("#")
-        if len(s) != 6:
-            return fallback
-        return (int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16))
-    except Exception:
-        return fallback
-
-
-def _certainty_color(pct: float):
-    pct = max(0.0, min(100.0, pct))
-    return _gradient_color((100 - pct) * 1.8)
-
-
-def _gradient_color(angle: float):
-    if angle <= 90:
-        t = angle / 90.0
-        red = int(255 * t)
-        green = 255
-        return (red, green, 0)
-    t = (angle - 90) / 90.0
-    red = 255
-    green = int(255 * (1 - t))
-    return (red, green, 0)
-
-
-def _blind_eval_color(evaluation):
-    return {
-        "EXCELLENT": (0, 255, 0),
-        "HIGHROLL_GOOD": (100, 255, 100),
-        "HIGHROLL_OKAY": (114, 214, 2),
-        "BAD_BUT_IN_RING": (222, 220, 3),
-        "BAD": (255, 100, 0),
-        "NOT_IN_RING": (255, 0, 0),
-    }.get(evaluation, (255, 255, 255))
-
-
-def _format_blind_eval(evaluation):
-    return {
-        "EXCELLENT": "excellent",
-        "HIGHROLL_GOOD": "good for highroll",
-        "HIGHROLL_OKAY": "okay for highroll",
-        "BAD_BUT_IN_RING": "bad, but in ring",
-        "BAD": "bad",
-        "NOT_IN_RING": "not in any ring",
-    }.get(evaluation, evaluation)
 
 
 ADJ_POS = (117, 204, 108)
@@ -239,7 +191,7 @@ def render_default_preview(settings: dict) -> Image.Image:
 
     neg_coords_enabled = settings.get("negative_coords_color_enabled", False)
     show_adj_count = settings.get("show_angle_adjustment_count", False)
-    neg_coords_rgb = _hex_to_rgb(
+    neg_coords_rgb = hex_to_rgb(
         settings.get("negative_coords_color", "#BA6669"), (186, 102, 105)
     )
     ow_coords_format = settings.get("overworld_coords_format", "four_four")
@@ -561,7 +513,7 @@ def render_default_preview(settings: dict) -> Image.Image:
             x += cw
 
         draw_coord_cell("loc", r["loc"])
-        draw_cell("cert", f"{r['cert_pct']:.1f}%", fill=_certainty_color(r["cert_pct"]))
+        draw_cell("cert", f"{r['cert_pct']:.1f}%", fill=certainty_color(r["cert_pct"]))
         draw_cell("dist", str(r["dist"]))
         draw_coord_cell("nether", r["nether"])
 
@@ -570,7 +522,7 @@ def render_default_preview(settings: dict) -> Image.Image:
         base_str = r["angle"]
         arrow = "->" if r["dir"] > 0 else "<-"
         dir_part = f" ({arrow} {abs(r['dir']):.1f})"
-        dir_col = _gradient_color(abs(r["dir"]))
+        dir_col = gradient_color(abs(r["dir"]))
         full_w = tw(base_str) + tw(dir_part)
         bx = lx + (cw - full_w) // 2
         draw.text((bx, text_y), base_str, font=font, fill=_tc(NB_TEXT_C))
@@ -726,13 +678,13 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
     improve_deg = math.degrees(br["improveDirection"])
     improve_dist = br["improveDistance"]
 
-    eval_text = _format_blind_eval(evaluation)
+    eval_text = format_blind_evaluation(evaluation)
     _prefix = f"Blind coords ({round(x_nether)}, {round(z_nether)}) are "
     _l2p = f"{highroll_prob:.1f}%"
     _l2s = f" chance of <{int(highroll_thresh)} block blind"
     _l3 = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
 
-    eval_color = _blind_eval_color(evaluation)
+    eval_color = blind_evaluation_color(evaluation)
 
     num_display_rows = 5
     col_keys = ["loc", "cert", "dist", "nether", "angle"]
@@ -881,14 +833,14 @@ def render_default_blind_preview(settings: dict = None) -> Image.Image:
 def render_eye_throws_preview(settings: dict) -> Image.Image:
     bg_hex = settings.get("background_color", "#1E1E1E")
     text_hex = settings.get("text_color", "#FFFFFF")
-    bg_rgb = _hex_to_rgb(bg_hex, (255, 255, 255))
-    text_rgb = _hex_to_rgb(text_hex, (0, 0, 0))
+    bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
+    text_rgb = hex_to_rgb(text_hex, (0, 0, 0))
     neg_coords_enabled = settings.get("negative_coords_color_enabled", False)
-    neg_coords_rgb = _hex_to_rgb(
+    neg_coords_rgb = hex_to_rgb(
         settings.get("negative_coords_color", "#BA6669"), (204, 110, 114)
     )
     portal_dist_enabled = settings.get("portal_nether_color_enabled", False)
-    portal_dist_rgb = _hex_to_rgb(
+    portal_dist_rgb = hex_to_rgb(
         settings.get("portal_nether_color", "#FFA500"), (255, 165, 0)
     )
 
@@ -897,7 +849,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
 
     text_outline_enabled = settings.get("text_outline_enabled", False)
     text_outline_hex = settings.get("text_outline_color", "#000000")
-    text_outline_rgb = _hex_to_rgb(text_outline_hex, (0, 0, 0))
+    text_outline_rgb = hex_to_rgb(text_outline_hex, (0, 0, 0))
     text_outline_width = settings.get("text_outline_width", 2)
     outline_rgba = (*text_outline_rgb, int(text_opacity * 255))
 
@@ -1198,7 +1150,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
             if kind == "certainty":
                 txt = val
                 try:
-                    fill = _certainty_color(float(txt.rstrip("%")))
+                    fill = certainty_color(float(txt.rstrip("%")))
                 except Exception:
                     fill = text_rgb
                 draw.text(
@@ -1211,7 +1163,7 @@ def render_eye_throws_preview(settings: dict) -> Image.Image:
                     _last_turn_pct[0] = float(num)
                 except Exception:
                     pass
-                fill = _gradient_color(_last_turn_pct[0])
+                fill = gradient_color(_last_turn_pct[0])
                 full_change = f"({arrow} {num})"
                 cw_ = draw.textbbox(
                     (0, 0), full_change, font=font, **stroke_width_kwargs
@@ -1476,16 +1428,16 @@ PREVIEW_BLIND = {
 
 def render_blind_preview(settings: dict) -> Image.Image:
     bg_hex = settings.get("background_color", "#1E1E1E")
-    bg_rgb = _hex_to_rgb(bg_hex, (255, 255, 255))
+    bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
     text_hex = settings.get("text_color", "#000000")
-    text_rgb = _hex_to_rgb(text_hex, (0, 0, 0))
+    text_rgb = hex_to_rgb(text_hex, (0, 0, 0))
 
     bg_opacity = settings.get("background_opacity", 1.0)
     text_opacity = settings.get("text_opacity", 1.0)
 
     text_outline_enabled = settings.get("text_outline_enabled", False)
     text_outline_hex = settings.get("text_outline_color", "#000000")
-    text_outline_rgb = _hex_to_rgb(text_outline_hex, (0, 0, 0))
+    text_outline_rgb = hex_to_rgb(text_outline_hex, (0, 0, 0))
     text_outline_width = settings.get("text_outline_width", 2)
     outline_rgba = (*text_outline_rgb, int(text_opacity * 255))
 
@@ -1523,8 +1475,8 @@ def render_blind_preview(settings: dict) -> Image.Image:
     improve_deg = math.degrees(br["improveDirection"])
     improve_dist = br["improveDistance"]
 
-    eval_text = _format_blind_eval(evaluation)
-    eval_color = _blind_eval_color(evaluation)
+    eval_text = format_blind_evaluation(evaluation)
+    eval_color = blind_evaluation_color(evaluation)
     line1_pre = f"Blind coords ({int(x_nether)}, {int(z_nether)}) are "
     line1_eval = eval_text
     highroll_txt = f"{highroll_prob:.1f}%"
