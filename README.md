@@ -4,7 +4,7 @@
 [![GitHub downloads](https://img.shields.io/github/downloads/qMaxXen/NBTrackr/total?logo=github)](https://github.com/qMaxXen/NBTrackr/releases/latest)
 
 > [!IMPORTANT]
-> This script works **only on Linux**.
+> This program works **only on Linux**.
 
 A program that displays Ninjabrain Bot's info using a pinned image overlay. You can choose from two types of overlays: the default overlay shows a replica of Ninjabrain Bot's window, and a custom overlay which is a more minimal overlay with more customization options. This is mainly useful for **single-monitor** users, but also helpful for those with a second monitor.
 
