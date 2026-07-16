@@ -24,6 +24,7 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
 HEADLESS = "--headless" in sys.argv
 LOCK_OVERLAY = "--lock-overlay" in sys.argv
+CLICK_THROUGH = "--click-through" in sys.argv
 
 position_set = False
 
@@ -2522,12 +2523,22 @@ class _Scheduler(QObject):
 class OverlayWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowFlags(
-            Qt.FramelessWindowHint
-            | Qt.WindowStaysOnTopHint
-            | Qt.Tool
-            | Qt.X11BypassWindowManagerHint
-        )
+
+        if CLICK_THROUGH:
+            self.setWindowFlags(
+                Qt.FramelessWindowHint
+                | Qt.WindowStaysOnTopHint
+                | Qt.Tool
+                | Qt.X11BypassWindowManagerHint
+                | Qt.WindowTransparentForInput
+            )
+        else:
+            self.setWindowFlags(
+                Qt.FramelessWindowHint
+                | Qt.WindowStaysOnTopHint
+                | Qt.Tool
+                | Qt.X11BypassWindowManagerHint
+            )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_NoSystemBackground)
         self.setContentsMargins(0, 0, 0, 0)
