@@ -2715,29 +2715,35 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
 
 
 def check_ninjabrainbot_version():
-    try:
-        resp = requests.get("http://localhost:52533/api/v1/version", timeout=3)
-        resp.raise_for_status()
-        data = resp.json()
-        version_str = data.get("version", "")
-        parts = [int(x) for x in version_str.split(".")]
-        required = [1, 5, 2]
-        if parts < required:
-            print(
-                f"NBTrackr requires Ninjabrain Bot version 1.5.2+ to work properly.\n"
-                f"You are running version {version_str}.\n"
-                f"Please update to the latest version:\n"
-                f"https://github.com/Ninjabrain1/Ninjabrain-Bot/releases/latest"
-            )
-            sys.exit(1)
-    except SystemExit:
-        raise
-    except Exception as e:
-        log(f"Could not connect to Ninjabrain Bot to verify version: {e}\n")
-        print(
-            "ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced."
-        )
-        sys.exit(1)
+    sent_print_error = False
+    required = [1, 5, 2]
+
+    while True:
+        try:
+            resp = requests.get("http://localhost:52533/api/v1/version", timeout=3)
+            resp.raise_for_status()
+            data = resp.json()
+            version_str = data.get("version", "")
+            parts = [int(x) for x in version_str.split(".")]
+            if parts < required:
+                print(
+                    f"NBTrackr requires Ninjabrain Bot version 1.5.2+ to work properly.\n"
+                    f"You are running version {version_str}.\n"
+                    f"Please update to the latest version:\n"
+                    f"https://github.com/Ninjabrain1/Ninjabrain-Bot/releases/latest"
+                )
+                sys.exit(1)
+            return
+        except SystemExit:
+            raise
+        except Exception as e:
+            log(f"Could not connect to Ninjabrain Bot to verify version: {e}\n")
+            if not sent_print_error:
+                print(
+                    "ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced."
+                )
+                sent_print_error = True
+            time.sleep(1)
 
 
 # ---------------------- Helpers - END ----------------------
