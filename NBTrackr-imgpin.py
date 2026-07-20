@@ -25,6 +25,7 @@ CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
 HEADLESS = "--headless" in sys.argv
 LOCK_OVERLAY = "--lock-overlay" in sys.argv
 CLICK_THROUGH = "--click-through" in sys.argv
+DEBUG_MODE_FLAG = "--debug" in sys.argv
 
 position_set = False
 
@@ -72,7 +73,7 @@ def _load_advanced_settings():
 
 DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
 
-if DEBUG_MODE:
+if DEBUG_MODE or DEBUG_MODE_FLAG:
     def log(*args):
         timestamp = datetime.now().strftime("[%H:%M:%S]")
         msg = " ".join(map(str, args))
