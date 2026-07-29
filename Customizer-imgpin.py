@@ -1,12 +1,20 @@
-import os
+import colorsys
 import json
 import math
-import tkinter as tk
+import os
 import subprocess
-import colorsys
-from tkinter import ttk, messagebox
+import tkinter as tk
+from tkinter import messagebox, ttk
+
 from PIL import Image, ImageDraw, ImageFont, ImageTk
-from shared.colors import gradient_color, certainty_color, blind_evaluation_color, hex_to_rgb, format_blind_evaluation
+
+from shared.colors import (
+    blind_evaluation_color,
+    certainty_color,
+    format_blind_evaluation,
+    gradient_color,
+    hex_to_rgb,
+)
 
 CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 BUNDLED_FONT_DISPLAY = "LiberationSans-Bold (Bundled)"

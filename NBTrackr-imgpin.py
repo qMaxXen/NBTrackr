@@ -11,9 +11,9 @@ import time
 import requests
 import sseclient
 from PIL import Image, ImageDraw, ImageFont
-from PyQt5.QtCore import QObject, Qt, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 from core.updater import check_and_update, check_for_update
 from shared.colors import (
@@ -38,8 +38,6 @@ CLICK_THROUGH = "--click-through" in sys.argv
 DEBUG_MODE_FLAG = "--debug" in sys.argv
 
 position_set = False
-
-# --------------------- Cache --------------------------
 
 _cached_customizations = None
 _last_custom_mtime = 0
@@ -103,9 +101,12 @@ ADJ_COUNT_NEGATIVE = (204, 110, 114)
 def _strip_html(text):
     return re.sub(r"<[^>]+>", "", text)
 
-
-# --------------------- Cache End --------------------------
-
+def _get_virtual_desktop_geometry(app):
+    combined = None
+    for screen in app.screens():
+        geo = screen.geometry()
+        combined = geo if combined is None else combined.united(geo)
+    return combined
 
 def _get_assets_dir():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
@@ -2287,11 +2288,11 @@ def get_window_hiding_method():
 
 
 class _Scheduler(QObject):
-    _fn_signal = pyqtSignal(object)
+    _function_signal = Signal(object)
 
     def __init__(self):
         super().__init__()
-        self._fn_signal.connect(self._invoke, Qt.QueuedConnection)
+        self._function_signal.connect(self._invoke, Qt.QueuedConnection)
 
     @staticmethod
     def _invoke(function):
@@ -2301,7 +2302,7 @@ class _Scheduler(QObject):
             logger.exception("[Scheduler] Exception in scheduled call")
 
     def schedule(self, function):
-        self._fn_signal.emit(function)
+        self._function_signal.emit(function)
 
 
 # ---------------------- Qt Overlay Window ----------------------
@@ -2342,7 +2343,7 @@ class OverlayWindow(QWidget):
 
     def mousePressEvent(self, event):
         if not LOCK_OVERLAY and event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
@@ -2351,7 +2352,7 @@ class OverlayWindow(QWidget):
             and self._drag_pos is not None
             and event.buttons() & Qt.LeftButton
         ):
-            self.move(event.globalPos() - self._drag_pos)
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
 
     def mouseReleaseEvent(self, event):
@@ -2604,6 +2605,7 @@ if __name__ == "__main__":
 
 # --------------------- Qt Application & Overlay Window --------------------------
 
+
 IMAGE_PATH = "/tmp/imgpin-overlay.png"
 
 GREEN_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_green.png")
@@ -2626,7 +2628,7 @@ else:
         try:
             window.move(sx, sy)
 
-            desktop_rect = app.desktop().geometry()
+            desktop_rect = _get_virtual_desktop_geometry(app)
             logger.debug("[Window] Desktop rect: %s", desktop_rect)
             logger.debug("[Window] Window rect: %s", window.geometry())
 
@@ -3051,4 +3053,4 @@ if HEADLESS:
     except KeyboardInterrupt:
         pass
 else:
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
