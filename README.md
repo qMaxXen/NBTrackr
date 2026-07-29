@@ -48,8 +48,8 @@ Read the [FEATURES.md](https://github.com/qMaxXen/NBTrackr/blob/main/FEATURES.md
 NBTrackr is licensed under the MIT license. You can view the full license [here](https://github.com/qMaxXen/NBTrackr/blob/main/LICENSE).
 
 ## Credits
-- [Ninjabrain](https://github.com/Ninjabrain1) – creator of Ninjabrain Bot.
-- [Marin774](https://github.com/marin774) – for creating the [Jingle Calc Overlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which heavily inspired the GUI for `Customizer-imgpin.py`, and for generally inspiring parts of the implementation.
+- [Ninjabrain](https://github.com/Ninjabrain1) **-** for creating Ninjabrain Bot
+- [Marin774](https://github.com/marin774) **-** for creating the [Jingle Calc Overlay Plugin](https://github.com/Marin774/Jingle-CalcOverlay-Plugin), which heavily inspired the GUI for `Customizer-imgpin.py`, and for generally inspiring parts of the implementation
 
 ---
 
