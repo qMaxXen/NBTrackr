@@ -1,20 +1,29 @@
-import sys
+import json
+import logging
 import math
 import os
-import threading
-import time
-import requests
-import sseclient
-import json
 import re
 import signal
-from datetime import datetime
+import sys
+import threading
+import time
+
+import requests
+import sseclient
 from PIL import Image, ImageDraw, ImageFont
-from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout
-from PyQt5.QtCore import Qt, QObject, pyqtSignal
-from PyQt5.QtGui import QPixmap, QImage
-from shared.colors import gradient_color, certainty_color, blind_evaluation_color, hex_to_rgb, with_alpha, format_blind_evaluation
-from core.updater import check_for_update, check_and_update
+from PyQt5.QtCore import QObject, Qt, pyqtSignal
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+
+from core.updater import check_and_update, check_for_update
+from shared.colors import (
+    blind_evaluation_color,
+    certainty_color,
+    format_blind_evaluation,
+    gradient_color,
+    hex_to_rgb,
+    with_alpha,
+)
 
 # Program Version
 APP_VERSION = "v2.6.0"
@@ -38,13 +47,37 @@ _last_overlay_w = 0
 _last_overlay_h = 0
 _window_visible = False
 
+def _load_advanced_settings():
+    try:
+        with open(CUSTOMIZATIONS_FILE, "r") as f:
+            data = json.load(f)
+        return bool(data.get("debug_mode", False))
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
+        return False
+
+DEBUG_MODE = _load_advanced_settings()
+
+if DEBUG_MODE or DEBUG_MODE_FLAG:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d - %(message)s",
+        datefmt="%H:%M:%S",
+    )
+else:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+logger = logging.getLogger(__name__)
 
 def get_customizations():
     global _cached_customizations, _last_custom_mtime
     try:
         mtime = os.path.getmtime(CUSTOMIZATIONS_FILE)
-    except Exception as e:
-        log("[Config] Failed to stat customizations file:", e)
+    except Exception:
+        logger.exception("[Config] Failed to check customizations file modification time")
         if _cached_customizations is not None:
             return _cached_customizations
         return {}
@@ -56,38 +89,16 @@ def get_customizations():
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             _cached_customizations = json.load(f)
         _last_custom_mtime = mtime
-        log("[Config] Customizations reloaded from disk")
-    except Exception as e:
-        log("[Config] Failed to load customizations:", e)
+        logger.debug("[Config] Customizations reloaded from disk")
+    except Exception:
+        logger.exception("[Config] Failed to load customizations")
         if _cached_customizations is None:
             _cached_customizations = {}
 
     return _cached_customizations
 
-
-def _load_advanced_settings():
-    try:
-        with open(CUSTOMIZATIONS_FILE, "r") as f:
-            data = json.load(f)
-        return bool(data.get("debug_mode", False))
-    except Exception:
-        return False
-
-DEBUG_MODE = _load_advanced_settings()
-
-if DEBUG_MODE or DEBUG_MODE_FLAG:
-    def log(*args):
-        timestamp = datetime.now().strftime("[%H:%M:%S]")
-        msg = " ".join(map(str, args))
-        print(f"{timestamp} {msg}")
-else:
-    def log(*args):
-        pass
-
-
 ADJ_COUNT_POSITIVE = (117, 204, 108)
 ADJ_COUNT_NEGATIVE = (204, 110, 114)
-
 
 def _strip_html(text):
     return re.sub(r"<[^>]+>", "", text)
@@ -103,21 +114,29 @@ def _get_assets_dir():
 _nb_font_missing_warned = False
 
 
-def _load_nb_font(size):
+def _load_nb_font(size, custom_font_path=""):
     global _nb_font_missing_warned
+
+    if custom_font_path:
+        try:
+            return ImageFont.truetype(custom_font_path, size)
+        except Exception:
+            logger.exception("Failed to load custom font: %s", custom_font_path)
+
     assets_dir = _get_assets_dir()
     font_path = os.path.join(assets_dir, "LiberationSans", "LiberationSans-Bold.ttf")
     if os.path.isfile(font_path):
         try:
             return ImageFont.truetype(font_path, size)
         except Exception:
-            pass
+            logger.exception("Failed to load bundled font: %s", font_path)
     if not _nb_font_missing_warned:
-        print(
-            "ERROR: Could not find the bundled font at:\n"
-            f"  {font_path}\n"
-            "The overlay text will use a fallback font and may look incorrect.\n"
-            "Please reinstall NBTrackr to restore the missing file."
+        logger.error(
+            "Could not load bundled font at:\n"
+            "  %s\n"
+            "The overlay text will use a fallback font.\n"
+            "Please reinstall NBTrackr: https://github.com/qMaxXen/NBTrackr/releases/latest.",
+            font_path,
         )
         _nb_font_missing_warned = True
     return ImageFont.load_default()
@@ -202,30 +221,15 @@ def generate_default_pinned_image():
     blind_result = blind_resp.get("blindResult", {})
 
     customizations = get_customizations()
-
-    try:
-        font_size = int(customizations.get("font_size", 18))
-    except Exception:
-        font_size = 18
-
+    font_size = int(customizations.get("font_size", 18))
     user_font_path = customizations.get("font_name", "")
-
     show_boat_icon_setting = bool(customizations.get("show_boat_icon", True))
     show_blind_info_setting = bool(customizations.get("show_blind_info", True))
-
-    try:
-        neg_coords_enabled = bool(customizations.get("negative_coords_color_enabled", False))
-        neg_coords_rgb = hex_to_rgb(
-            customizations.get("negative_coords_color", "#BA6669"), (186, 102, 105)
-        )
-    except Exception:
-        neg_coords_enabled = False
-        neg_coords_rgb = (186, 102, 105)
-
+    neg_coords_enabled = bool(customizations.get("negative_coords_color_enabled", False))
+    neg_coords_rgb = hex_to_rgb(customizations.get("negative_coords_color", "#BA6669"), (186, 102, 105))
     ow_coords_format = customizations.get("overworld_coords_format", "four_four")
     show_adj_count = bool(customizations.get("show_angle_adjustment_count", False))
     auto_hide_window = bool(customizations.get("auto_hide_window", True))
-
     bg_opacity = max(0.0, min(1.0, float(customizations.get("background_opacity", 1.0))))
     text_opacity = max(0.0, min(1.0, float(customizations.get("text_opacity", 1.0))))
 
@@ -543,41 +547,32 @@ def generate_default_pinned_image():
 
     _save_and_apply(img)
 
-
-def _save_and_apply(img):
-    tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
+def _write_image_to_path(img, path):
+    tmp = f"{path}.{threading.get_ident()}.tmp.png"
     try:
         img.save(tmp, format="PNG")
+    except Exception:
+        logger.exception("Failed to save image to tmp file: %s", tmp)
+        return
+    try:
+        os.replace(tmp, path)
+    except Exception:
+        logger.exception("Failed to replace image file, trying fallback: %s", path)
         try:
-            os.replace(tmp, IMAGE_PATH)
+            if os.path.exists(path):
+                os.remove(path)
+            os.rename(tmp, path)
         except Exception:
-            try:
-                if os.path.exists(IMAGE_PATH):
-                    os.remove(IMAGE_PATH)
-                os.rename(tmp, IMAGE_PATH)
-            except Exception as e:
-                log("Failed to move tmp overlay file:", e)
-    except Exception as e:
-        log("Failed to save default overlay image:", e)
+            logger.exception("Failed to move tmp image file: %s", path)
+
+def _save_and_apply(img):
+    _write_image_to_path(img, IMAGE_PATH)
     _schedule(lambda im=img: apply_overlay_from_pil(im))
 
 
 def clear_overlay_image():
-    try:
-        empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-        tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
-        empty.save(tmp, format="PNG")
-        try:
-            os.replace(tmp, IMAGE_PATH)
-        except Exception:
-            try:
-                if os.path.exists(IMAGE_PATH):
-                    os.remove(IMAGE_PATH)
-                os.rename(tmp, IMAGE_PATH)
-            except Exception as e:
-                log("clear_overlay_image: Failed to write empty overlay:", e)
-    except Exception as e:
-        log("clear_overlay_image: Failed:", e)
+    empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    _write_image_to_path(empty, IMAGE_PATH)
     if not HEADLESS:
         customizations = get_customizations()
         if bool(customizations.get("auto_hide_window", True)):
@@ -590,11 +585,11 @@ def clear_overlay_image():
                 _schedule(lambda im=empty: apply_overlay_from_pil(im))
 
 
-def _schedule(fn):
+def _schedule(function):
     if HEADLESS:
-        fn()
+        function()
     else:
-        _scheduler.schedule(fn)
+        _scheduler.schedule(function)
 
 
 def _make_draw_surface(w, h):
@@ -653,7 +648,7 @@ def _render_nb_stronghold(
             try:
                 return ImageFont.truetype(user_font_path, size)
             except Exception:
-                pass
+                logger.exception("Failed to load custom font: %s", user_font_path)
         return _load_nb_font(size)
 
     hdr_font = _load_font_for_size(font_size)
@@ -917,8 +912,7 @@ def _render_nb_stronghold(
         col_widths[expand_keys[-1]] += img_w - sum(col_widths[k] for k in col_keys)
 
     leftover = img_w - sum(throw_nat)
-    if leftover < 0:
-        leftover = 0
+    leftover = max(leftover, 0)
 
     outer_bonus = int(leftover * 0.20)
     centre_bonus = int(leftover * 0.30)
@@ -1001,17 +995,11 @@ def _render_nb_stronghold(
     nh_text_y = (new_header_h - th(new_header_font)) // 2
     draw.text((nh_text_x, nh_text_y), "NBTrackr", font=new_header_font, fill=_NB_TEXT)
     ver_x = nh_text_x + tw("NBTrackr", new_header_font) + 8
-    a_title, d_title = new_header_font.getmetrics()
-    a_ver, d_ver = new_header_ver_font.getmetrics()
-
+    a_title, _d_title = new_header_font.getmetrics()
+    a_ver, _d_ver = new_header_ver_font.getmetrics()
     title_baseline = nh_text_y + a_title
     ver_y = title_baseline - a_ver
-    try:
-        draw.text(
-            (ver_x, ver_y), APP_VERSION, font=new_header_ver_font, fill=_NEW_HDR_VER_FG
-        )
-    except Exception:
-        pass
+    draw.text((ver_x, ver_y), APP_VERSION, font=new_header_ver_font, fill=_NEW_HDR_VER_FG)
 
     _boat_icon_map = {
         "VALID": "boat_green_icon.png",
@@ -1033,7 +1021,7 @@ def _render_nb_stronghold(
                 _icon_y = (new_header_h - _icon_size) // 2
                 img.alpha_composite(_bicon, (_icon_x, _icon_y))
         except Exception:
-            pass
+            logger.exception("Failed to load boat icon: %s", _boat_icon_path)
 
     new_header_bottom = new_header_h + HDR_SEP
 
@@ -1242,6 +1230,7 @@ def _render_nb_stronghold(
                     img.alpha_composite(icon_img, (CELL_PAD_MAIN, icon_y))
                 text_start_x = CELL_PAD_MAIN + icon_size + 8
             except Exception:
+                logger.exception("Failed to load info message icon: %s", icon_path)
                 text_start_x = CELL_PAD_MAIN
 
             if msg_type in _TWO_LINE_TYPES:
@@ -1261,6 +1250,10 @@ def _render_nb_stronghold(
                                 pct_val = float(pct_str.rstrip("%"))
                                 pct_color = _tc_dyn(_nb_certainty_color(pct_val))
                             except Exception:
+                                logger.exception(
+                                    "Failed to parse percentage from COMBINED_CERTAINTY message: %r",
+                                    pct_str,
+                                )
                                 pct_color = _PORTAL_WARN_COLOR
                             bx = text_start_x
                             draw.text(
@@ -1499,15 +1492,12 @@ def generate_custom_pinned_image():
     text_outline_enabled = bool(customizations.get("text_outline_enabled", False))
     text_outline_color_hex = customizations.get("text_outline_color", "#000000")
     text_outline_rgb = hex_to_rgb(text_outline_color_hex, (0, 0, 0))
-    try:
-        text_outline_width = int(customizations.get("text_outline_width", 2))
-        text_outline_width = max(1, min(10, text_outline_width))
-    except Exception:
-        text_outline_width = 2
+    text_outline_width = int(customizations.get("text_outline_width", 2))
+    text_outline_width = max(1, min(10, text_outline_width))
 
-    bg_rgba = (bg_rgb[0], bg_rgb[1], bg_rgb[2], int(bg_opacity * 255))
-    text_rgba = (*text_rgb, int(text_opacity * 255))
-    outline_rgba = (*text_outline_rgb, int(text_opacity * 255))
+    bg_rgba = with_alpha(bg_rgb, bg_opacity)
+    text_rgba = with_alpha(text_rgb, text_opacity)
+    outline_rgba = with_alpha(text_outline_rgb, text_opacity)
 
     stroke_kwargs = {}
     stroke_width_kwargs = {}
@@ -1523,8 +1513,6 @@ def generate_custom_pinned_image():
     show_coords_by_dim = customizations.get("show_coords_based_on_dimension", True)
     show_error_message = customizations.get("show_error_message", False)
     show_blind_info = customizations.get("show_blind_info", True)
-    blind_hide_after = customizations.get("blind_info_hide_after", 20)
-    blind_hide_after_enabled = customizations.get("blind_info_hide_after_enabled", False)
     font_size = customizations.get("font_size", 18)
     show_adj_count = customizations.get("show_angle_adjustment_count", False)
     ow_coords_format = customizations.get("overworld_coords_format", "four_four")
@@ -1542,7 +1530,6 @@ def generate_custom_pinned_image():
         boat_resp = dict(status["boat_resp"])
         stronghold_resp = dict(status["stronghold_resp"])
         blind_resp = dict(status["blind_resp"])
-        info_resp = dict(status["info_resp"])
         show_until = status.get("showUntil", 0)
 
     if not stronghold_resp:
@@ -1572,17 +1559,11 @@ def generate_custom_pinned_image():
     if blind_was_showing:
         should_hide = False
 
-        if not show_blind_info:
-            should_hide = True
-        elif not blind_enabled:
-            should_hide = True
-        elif not has_valid_blind_result:
-            should_hide = True
-        elif result_type not in ("NONE", "BLIND"):
+        if not show_blind_info or not blind_enabled or not has_valid_blind_result or result_type not in ("NONE", "BLIND"):
             should_hide = True
 
         if should_hide:
-            log("[Render] Hiding blind info")
+            logger.debug("[Render] Hiding blind info")
             with status_lock:
                 status["blindCurrentlyShowing"] = False
 
@@ -1608,20 +1589,7 @@ def generate_custom_pinned_image():
             line3 = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
 
             font_name = customizations.get("font_name", "")
-            font = None
-            if font_name:
-                try:
-                    font = ImageFont.truetype(font_name, font_size)
-                except Exception:
-                    pass
-            if font is None:
-                _default_font_path = os.path.join(
-                    _get_assets_dir(), "LiberationSans", "LiberationSans-Bold.ttf"
-                )
-                try:
-                    font = ImageFont.truetype(_default_font_path, font_size)
-                except Exception:
-                    font = ImageFont.load_default()
+            font = _load_nb_font(font_size, font_name)
 
             dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
             w_line1_pre = dummy.textbbox(
@@ -1646,10 +1614,7 @@ def generate_custom_pinned_image():
 
             img = Image.new("RGBA", (int(max_w + 2 * pad), height), bg_rgba)
             draw = ImageDraw.Draw(img)
-            eval_color_rgba = (
-                *blind_evaluation_color(evaluation),
-                int(text_opacity * 255),
-            )
+            eval_color_rgba = with_alpha(blind_evaluation_color(evaluation), text_opacity)
 
             x, y = pad, 10
             draw.text((x, y), line1_pre, font=font, fill=text_rgba, **stroke_kwargs)
@@ -1679,13 +1644,11 @@ def generate_custom_pinned_image():
             y += line_h
             draw.text((pad, y), line3, font=font, fill=text_rgba, **stroke_kwargs)
 
-            try:
-                img.save(IMAGE_PATH)
-                log(
-                    f"[Render] Saved blind overlay image (Expires: {blind_show_until:.2f})"
-                )
-            except Exception as e:
-                log("[Render] Failed to save blind overlay image:", e)
+            _write_image_to_path(img, IMAGE_PATH)
+            logger.debug(
+                "[Render] Saved blind overlay image (Expires: %.2f)",
+                blind_show_until,
+            )
 
             with status_lock:
                 status["blindCurrentlyShowing"] = True
@@ -1696,26 +1659,13 @@ def generate_custom_pinned_image():
     if result_type == "TRIANGULATION":
         with status_lock:
             if status["blindShowUntil"] > 0:
-                log("[System] Result type is TRIANGULATION (Clearing blind timer)")
+                logger.debug("[System] Result type is TRIANGULATION (Clearing blind timer)")
                 status["blindShowUntil"] = 0
 
     if show_error_message and result_type == "FAILED":
         text = "Could not determine the stronghold chunk."
         font_name = customizations.get("font_name", "")
-        font = None
-        if font_name:
-            try:
-                font = ImageFont.truetype(font_name, font_size)
-            except Exception:
-                pass
-        if font is None:
-            _default_font_path = os.path.join(
-                _get_assets_dir(), "LiberationSans", "LiberationSans-Bold.ttf"
-            )
-            try:
-                font = ImageFont.truetype(_default_font_path, font_size)
-            except Exception:
-                font = ImageFont.load_default()
+        font = _load_nb_font(font_size, font_name)
 
         dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = dummy.textbbox((0, 0), text, font=font, **stroke_kwargs)
@@ -1733,10 +1683,7 @@ def generate_custom_pinned_image():
             fill=text_rgba,
             **stroke_kwargs,
         )
-        try:
-            img.save(IMAGE_PATH)
-        except Exception as e:
-            log("[Render] Failed to save overlay image (Error message):", e)
+        _write_image_to_path(img, IMAGE_PATH)
         _schedule(lambda im=img: apply_overlay_from_pil(im))
         return
 
@@ -1761,23 +1708,10 @@ def generate_custom_pinned_image():
                 icon = Image.open(icon_path).convert("RGBA")
                 icon = icon.resize((64, 64), Image.LANCZOS)
                 icon = _apply_img_opacity(icon, text_opacity)
-            except Exception as e:
-                log("[Render] Failed to load/process icon:", e)
+            except Exception:
+                logger.exception("[Render] Failed to load/process icon")
             else:
-                tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
-                try:
-                    icon.save(tmp, format="PNG")
-                    try:
-                        os.replace(tmp, IMAGE_PATH)
-                    except Exception:
-                        try:
-                            if os.path.exists(IMAGE_PATH):
-                                os.remove(IMAGE_PATH)
-                            os.rename(tmp, IMAGE_PATH)
-                        except Exception as e2:
-                            log("[Render] Failed to save boat icon to IMAGE_PATH:", e2)
-                except Exception as e:
-                    log("[Render] Failed to save boat icon:", e)
+                _write_image_to_path(icon, IMAGE_PATH)
                 _schedule(lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
             if not bool(customizations.get("auto_hide_window", True)):
@@ -1920,20 +1854,7 @@ def generate_custom_pinned_image():
             return
 
     font_name = customizations.get("font_name", "")
-    font = None
-    if font_name:
-        try:
-            font = ImageFont.truetype(font_name, font_size)
-        except Exception:
-            pass
-    if font is None:
-        _default_font_path = os.path.join(
-            _get_assets_dir(), "LiberationSans", "LiberationSans-Bold.ttf"
-        )
-        try:
-            font = ImageFont.truetype(_default_font_path, font_size)
-        except Exception:
-            font = ImageFont.load_default()
+    font = _load_nb_font(font_size, font_name)
 
     ascent, descent = font.getmetrics()
     line_h = ascent + descent + 6
@@ -1945,20 +1866,7 @@ def generate_custom_pinned_image():
 
     n_bottom_rows = max(len(adj_count_overlays), len(angle_error_overlays))
     small_font_size = max(8, int(font_size * 0.90))
-    small_font = None
-    if font_name:
-        try:
-            small_font = ImageFont.truetype(font_name, small_font_size)
-        except Exception:
-            pass
-    if small_font is None:
-        _default_font_path = os.path.join(
-            _get_assets_dir(), "LiberationSans", "LiberationSans-Bold.ttf"
-        )
-        try:
-            small_font = ImageFont.truetype(_default_font_path, small_font_size)
-        except Exception:
-            small_font = ImageFont.load_default()
+    small_font = _load_nb_font(small_font_size, font_name)
 
     small_ascent, small_descent = small_font.getmetrics()
     small_line_h = small_ascent + small_descent + 4
@@ -2068,7 +1976,10 @@ def generate_custom_pinned_image():
                 try:
                     _last_turn_pct[0] = float(_item[1][1])
                 except Exception:
-                    pass
+                    logger.exception(
+                        "Failed to parse angle_change value for turn percentage: %r",
+                        _item[1],
+                    )
                 break
 
         for slot_idx, item in enumerate(parts):
@@ -2085,8 +1996,11 @@ def generate_custom_pinned_image():
                 txt = val
                 try:
                     pct = float(txt.rstrip("%"))
-                    fill = (*certainty_color(pct), int(text_opacity * 255))
+                    fill = with_alpha(certainty_color(pct), text_opacity)
                 except Exception:
+                    logger.exception(
+                        "Failed to parse certainty percentage for color: %r", txt
+                    )
                     fill = text_rgba
                 draw.text((_cx(txt), y), txt, font=font, fill=fill, **stroke_kwargs)
 
@@ -2095,8 +2009,10 @@ def generate_custom_pinned_image():
                 try:
                     _last_turn_pct[0] = float(num)
                 except Exception:
-                    pass
-                fill = (*gradient_color(_last_turn_pct[0]), int(text_opacity * 255))
+                    logger.exception(
+                        "Failed to parse angle_change num for gradient color: %r", num
+                    )
+                fill = with_alpha(gradient_color(_last_turn_pct[0]), text_opacity)
                 full_change = f"({arrow} {num})"
                 cw_ = draw.textbbox(
                     (0, 0), full_change, font=font, **stroke_width_kwargs
@@ -2120,12 +2036,12 @@ def generate_custom_pinned_image():
                 x_str = str(cx_v)
                 z_str = str(cz_v)
                 x_fill = (
-                    (*neg_coords_rgb, int(text_opacity * 255))
+                    with_alpha(neg_coords_rgb, text_opacity)
                     if neg_coords_enabled and cx_v < 0
                     else text_rgba
                 )
                 z_fill = (
-                    (*neg_coords_rgb, int(text_opacity * 255))
+                    with_alpha(neg_coords_rgb, text_opacity)
                     if neg_coords_enabled and cz_v < 0
                     else text_rgba
                 )
@@ -2155,24 +2071,24 @@ def generate_custom_pinned_image():
                 z_str = str(cz_v)
                 _is_portal = portal_nether_enabled and _portal_link
                 punct_fill = (
-                    (*portal_nether_rgb, int(text_opacity * 255))
+                    with_alpha(portal_nether_rgb, text_opacity)
                     if _is_portal
                     else text_rgba
                 )
                 x_fill = (
-                    (*portal_nether_rgb, int(text_opacity * 255))
+                    with_alpha(portal_nether_rgb, text_opacity)
                     if _is_portal
                     else (
-                        (*neg_coords_rgb, int(text_opacity * 255))
+                        with_alpha(neg_coords_rgb, text_opacity)
                         if neg_coords_enabled and cx_v < 0
                         else text_rgba
                     )
                 )
                 z_fill = (
-                    (*portal_nether_rgb, int(text_opacity * 255))
+                    with_alpha(portal_nether_rgb, text_opacity)
                     if _is_portal
                     else (
-                        (*neg_coords_rgb, int(text_opacity * 255))
+                        with_alpha(neg_coords_rgb, text_opacity)
                         if neg_coords_enabled and cz_v < 0
                         else text_rgba
                     )
@@ -2279,7 +2195,7 @@ def generate_custom_pinned_image():
                         if (adj_raw is None or adj_raw >= 0)
                         else ADJ_COUNT_NEGATIVE
                     )
-                    adj_fill = (*base_color, int(text_opacity * 255))
+                    adj_fill = with_alpha(base_color, text_opacity)
                     draw.text(
                         (adj_x + angle_w, row_y),
                         count_txt,
@@ -2341,22 +2257,7 @@ def generate_custom_pinned_image():
                     **stroke_kwargs,
                 )
 
-    tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
-    try:
-        img.save(tmp, format="PNG")
-        try:
-            os.replace(tmp, IMAGE_PATH)
-            log(f"[Render] Saved overlay image: {IMAGE_PATH}")
-        except Exception:
-            try:
-                if os.path.exists(IMAGE_PATH):
-                    os.remove(IMAGE_PATH)
-                os.rename(tmp, IMAGE_PATH)
-                log(f"[Render] Saved overlay image (Fallback rename): {IMAGE_PATH}")
-            except Exception as e:
-                log("[Render] Failed to move tmp overlay file into place:", e)
-    except Exception as e:
-        log("[Render] Failed to save overlay image:", e)
+    _write_image_to_path(img, IMAGE_PATH)
 
     _schedule(lambda im=img: apply_overlay_from_pil(im))
 
@@ -2376,8 +2277,9 @@ def get_window_hiding_method():
             data = json.load(f)
         _window_hiding_method = data.get("hide_method", "withdraw")
     except Exception:
+        logger.exception("[Window] Failed to read window hiding method")
         _window_hiding_method = "withdraw"
-    log(f"[Window] Hide method loaded from config: '{_window_hiding_method}'")
+    logger.debug("[Window] Hide method loaded from config: %s", _window_hiding_method)
     return _window_hiding_method
 
 
@@ -2392,14 +2294,14 @@ class _Scheduler(QObject):
         self._fn_signal.connect(self._invoke, Qt.QueuedConnection)
 
     @staticmethod
-    def _invoke(fn):
+    def _invoke(function):
         try:
-            fn()
-        except Exception as e:
-            log(f"[Scheduler] Exception in scheduled call: {e}")
+            function()
+        except Exception:
+            logger.exception("[Scheduler] Exception in scheduled call")
 
-    def schedule(self, fn):
-        self._fn_signal.emit(fn)
+    def schedule(self, function):
+        self._fn_signal.emit(function)
 
 
 # ---------------------- Qt Overlay Window ----------------------
@@ -2461,7 +2363,7 @@ class OverlayWindow(QWidget):
             self._drag_pos = None
             if self.width() > 1 and self.height() > 1:
                 save_config()
-                log(
+                logger.debug(
                     f"[Window] Manual window repositioning finished (pos: {self.x()},{self.y()})"
                 )
             event.accept()
@@ -2495,15 +2397,15 @@ def show_window():
     global _window_visible
     _window_visible = True
     method = get_window_hiding_method()
-    log("[Window] Showing overlay window")
+    logger.debug("[Window] Showing overlay window")
     try:
         if method == "withdraw":
             window.show()
             window.raise_()
         else:
             window.show()
-    except Exception as e:
-        log(f"[Window] Failed to show window: {e}")
+    except Exception:
+        logger.exception("[Window] Failed to show window")
 
 
 def hide_window():
@@ -2513,7 +2415,12 @@ def hide_window():
     _window_visible = False
     method = get_window_hiding_method()
     pos = window.pos()
-    log(f"[Window] Hiding overlay window (Method: {method}, Pos: {pos.x()}, {pos.y()})")
+    logger.debug(
+        "[Window] Hiding overlay window (Method: %s, Pos: %s, %s)",
+        method,
+        pos.x(),
+        pos.y(),
+    )
     try:
         if method == "withdraw":
             window.hide()
@@ -2523,8 +2430,8 @@ def hide_window():
             window.move(0, 0)
         else:
             window.move(-10000, -10000)
-    except Exception as e:
-        log(f"[Window] Failed to hide window: {e}")
+    except Exception:
+        logger.exception("[Window] Failed to hide window")
 
 
 def place_window(width, height):
@@ -2542,10 +2449,11 @@ def place_window(width, height):
                 cur_x, cur_y = 0, 0
             window.setGeometry(cur_x, cur_y, int(width), int(height))
     except Exception:
+        logger.exception("Failed to set window geometry, falling back to resize")
         try:
             window.resize(int(width), int(height))
         except Exception:
-            pass
+            logger.exception("Fallback window resize failed")
 
 
 def _render_and_apply_blank_custom_overlay(customizations):
@@ -2553,23 +2461,8 @@ def _render_and_apply_blank_custom_overlay(customizations):
     bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
     bg_opacity = max(0.0, min(1.0, float(customizations.get("background_opacity", 1.0))))
 
-    blank_img = Image.new(
-        "RGBA", (500, 100), (bg_rgb[0], bg_rgb[1], bg_rgb[2], int(bg_opacity * 255))
-    )
-    try:
-        tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
-        blank_img.save(tmp, format="PNG")
-        try:
-            os.replace(tmp, IMAGE_PATH)
-        except Exception:
-            try:
-                if os.path.exists(IMAGE_PATH):
-                    os.remove(IMAGE_PATH)
-                os.rename(tmp, IMAGE_PATH)
-            except Exception:
-                pass
-    except Exception as e:
-        log("Failed to save custom overlay:", e)
+    blank_img = Image.new("RGBA", (500, 100), with_alpha(bg_rgb, bg_opacity))
+    _write_image_to_path(blank_img, IMAGE_PATH)
 
     _schedule(lambda im=blank_img: apply_overlay_from_pil(im))
 
@@ -2578,7 +2471,7 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
     if HEADLESS:
         w = int(width) if width is not None else pil_img.width
         h = int(height) if height is not None else pil_img.height
-        log(f"[System] Headless mode: overlay written ({w}x{h}px)")
+        logger.debug("[System] Headless mode: overlay written (%sx%spx)", w, h)
         return
     try:
         qpixmap = pil_to_qpixmap(pil_img)
@@ -2594,9 +2487,15 @@ def apply_overlay_from_pil(pil_img, width=None, height=None):
         place_window(w, h)
         show_window()
 
-        log(f"[Window] Applying overlay ({w}x{h}px) at ({window.x()},{window.y()})")
-    except Exception as e:
-        log(f"[Window] Failed to apply overlay: {e}")
+        logger.debug(
+            "[Window] Applying overlay (%dx%dpx) at (%d,%d)",
+            w,
+            h,
+            window.x(),
+            window.y(),
+        )
+    except Exception:
+        logger.exception("[Window] Failed to apply overlay")
 
 
 def check_ninjabrainbot_version():
@@ -2621,15 +2520,22 @@ def check_ninjabrainbot_version():
             return
         except SystemExit:
             raise
-        except Exception as e:
-            log(f"Could not connect to Ninjabrain Bot to verify version: {e}\n")
+        except requests.exceptions.RequestException:
             if not sent_print_error:
-                print(
-                    "ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced."
-                )
+                logger.debug("Could not connect to Ninjabrain Bot while checking version", exc_info=True)
+                print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
                 sent_print_error = True
+            else:
+                logger.debug("Still could not connect to Ninjabrain Bot to verify version")
             time.sleep(1)
-
+        except Exception:
+            if not sent_print_error:
+                logger.exception("Unexpected error while checking Ninjabrain Bot version")
+                print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
+                sent_print_error = True
+            else:
+                logger.debug("Still could not connect to Ninjabrain Bot to verify version")
+            time.sleep(1)
 
 # ---------------------- Helpers - END ----------------------
 
@@ -2648,10 +2554,10 @@ def load_config():
                 x = pos.get("x")
                 y = pos.get("y")
                 if isinstance(x, int) and isinstance(y, int):
-                    log(f"[Config] Loaded window position: x={x}, y={y}")
+                    logger.debug("[Config] Loaded window position: x=%d, y=%d", x, y)
                     return x, y
-    except Exception as e:
-        log(f"[Config] Failed to load settings.json: {e}")
+    except Exception:
+        logger.exception("[Config] Failed to load settings.json")
     return None
 
 
@@ -2664,26 +2570,9 @@ def save_config():
         config = {"position": {"x": x, "y": y}}
         with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=2)
-        log(f"[Config] Saved window position: x={x}, y={y}")
-    except Exception as e:
-        log(f"[Config] Failed to save settings.json: {e}")
-
-
-def load_customizations():
-    try:
-        if os.path.exists(CUSTOMIZATIONS_FILE):
-            with open(CUSTOMIZATIONS_FILE, "r") as f:
-                data = json.load(f)
-            val = data.get("use_custom_pinned_image", False)
-            if isinstance(val, bool):
-                log(
-                    f"[Config] Customizations reloaded from disk (use_custom_pinned_image: {val})"
-                )
-                return val
-    except Exception as e:
-        log(f"[Config] Failed to load customizations.json: {e}")
-    return False
-
+        logger.debug("[Config] Saved window position: x=%d, y=%d", x, y)
+    except Exception:
+        logger.exception("[Config] Failed to save settings.json")
 
 # --------------------- Startup --------------------------
 
@@ -2692,7 +2581,10 @@ if __name__ == "__main__":
     print(f"NBTrackr version: {APP_VERSION}\n")
 
     os.environ["QT_QPA_PLATFORM"] = "xcb"
-    log(f"[System] QT_QPA_PLATFORM set to: {os.environ.get('QT_QPA_PLATFORM')}")
+    logger.debug(
+        "[System] QT_QPA_PLATFORM set to: %s",
+        os.environ.get("QT_QPA_PLATFORM"),
+    )
 
     check_ninjabrainbot_version()
 
@@ -2735,8 +2627,8 @@ else:
             window.move(sx, sy)
 
             desktop_rect = app.desktop().geometry()
-            log(f"[Window] Desktop rect: {desktop_rect}")
-            log(f"[Window] Window rect: {window.geometry()}")
+            logger.debug("[Window] Desktop rect: %s", desktop_rect)
+            logger.debug("[Window] Window rect: %s", window.geometry())
 
             if not desktop_rect.intersects(window.geometry()):
                 print(f"Window at ({sx}, {sy}) is off-screen. Resetting to (0, 0).")
@@ -2744,9 +2636,10 @@ else:
                 save_config()
 
         except Exception:
-            pass
+            logger.exception("Failed to restore saved window position (%s, %s)", sx, sy)
+
     else:
-        log("[Window] No saved position found (first launch), placing window at (0, 0)")
+        logger.debug("[Window] No saved position found (first launch), placing window at (0, 0)")
         window.move(0, 0)
         save_config()
 
@@ -2774,7 +2667,7 @@ status = {
     "info_resp": {},
 }
 
-USE_CUSTOM_PINNED_IMAGE = load_customizations()
+USE_CUSTOM_PINNED_IMAGE = bool(get_customizations().get("use_custom_pinned_image", False))
 
 _nb_subscriber_connected = threading.Event()
 _nb_subscriber_stop_functions = []
@@ -2784,7 +2677,12 @@ def _sse_try_ping():
     try:
         resp = requests.get("http://localhost:52533/api/v1/ping", timeout=0.5)
         return resp.status_code == 200
+    except requests.exceptions.RequestException:
+        logger.debug("Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
+        return False
+
     except Exception:
+        logger.exception("Unexpected error while pinging Ninjabrain Bot.")
         return False
 
 
@@ -2805,16 +2703,19 @@ def _sse_subscribe(endpoint, on_event, on_disconnect):
                     continue
                 try:
                     data = json.loads(event.data)
-                except Exception as e:
-                    log(f"[SSE] Failed to parse {endpoint} event:", e)
+                except Exception:
+                    logger.exception("[SSE] Failed to parse %s event", endpoint)
                     continue
                 try:
                     on_event(data)
-                except Exception as e:
-                    log(f"[SSE] Event on {endpoint}:", e)
-        except Exception as e:
+                except Exception:
+                    logger.exception("[SSE] Event handler failed on %s", endpoint)
+        except requests.exceptions.RequestException:
             if not stop_flag["stop"]:
-                log(f"[SSE] Connection error on {endpoint}:", e)
+                logger.debug("[SSE] Connection to %s lost", endpoint, exc_info=True)
+        except Exception:
+            if not stop_flag["stop"]:
+                logger.exception("[SSE] Unexpected error on %s", endpoint)
         finally:
             if not stop_flag["stop"]:
                 on_disconnect()
@@ -2829,7 +2730,7 @@ def _sse_subscribe(endpoint, on_event, on_disconnect):
             try:
                 resp.close()
             except Exception:
-                pass
+                logger.exception("Failed to close SSE response for %s", endpoint)
 
     return stop
 
@@ -2857,17 +2758,24 @@ def _reset_status_disconnected():
         )
 
 
+_disconnect_lock = threading.Lock()
+
 def _handle_nb_disconnect():
-    if _nb_subscriber_connected.is_set():
-        print("ERROR: Lost connection to Ninjabrain Bot.")
-        log("[Connection] Connection lost")
-    _nb_subscriber_connected.clear()
+    with _disconnect_lock:
+        if not _nb_subscriber_connected.is_set():
+            return
+
+        _nb_subscriber_connected.clear()
+
+    print("Lost connection to Ninjabrain Bot.")
+    logger.debug("[Connection] Connection lost")
 
     for stop_function in _nb_subscriber_stop_functions:
         try:
             stop_function()
         except Exception:
-            pass
+            logger.exception("Failed to stop an SSE subscriber during disconnect")
+
     _nb_subscriber_stop_functions.clear()
 
     _reset_status_disconnected()
@@ -2976,7 +2884,7 @@ def _on_stronghold_event(stronghold_resp):
 
         if not status.get("blindModeEnabled") or result_type == "TRIANGULATION":
             if status["blindShowUntil"] > 0:
-                log("Clearing blind timer")
+                logger.debug("Clearing blind timer")
             status["blindShowUntil"] = 0
 
         boat_state = status["boatState"]
@@ -3017,7 +2925,7 @@ def _on_blind_event(blind_resp):
         elif has_valid_result and not prev_had_valid_result:
             blind_changed = True
         elif not has_valid_result and prev_had_valid_result:
-            log("Blind result cleared")
+            logger.debug("Blind result cleared")
             status["blindShowUntil"] = 0
 
         status["blindResult"] = blind_result if has_valid_result else None
@@ -3036,7 +2944,7 @@ def _on_blind_event(blind_resp):
 
         if not blind_enabled or status["resultType"] == "TRIANGULATION":
             if status["blindShowUntil"] > 0:
-                log("Clearing blind timer")
+                logger.debug("Clearing blind timer")
             status["blindShowUntil"] = 0
 
     _trigger_render()
@@ -3049,7 +2957,7 @@ def _on_info_messages_event(info_resp):
 
 
 def nb_connection_thread():
-    log("[System] SSE connection started")
+    logger.debug("[System] SSE connection started")
     logged_fail = False
 
     while True:
@@ -3059,7 +2967,7 @@ def nb_connection_thread():
 
         if _sse_try_ping():
             print("Connected to Ninjabrain Bot.")
-            log("[Connection] Successfully connected to Ninjabrain Bot API")
+            logger.debug("[Connection] Successfully connected to Ninjabrain Bot API")
             _nb_subscriber_connected.set()
             logged_fail = False
 
@@ -3081,7 +2989,7 @@ def nb_connection_thread():
 
 
 def blind_timer_monitor_thread():
-    log("[System] Timer monitor thread started")
+    logger.debug("[System] Timer monitor thread started")
     while True:
         with status_lock:
             blind_show_until = status["blindShowUntil"]
@@ -3092,14 +3000,14 @@ def blind_timer_monitor_thread():
             time_remaining = blind_show_until - now
 
             if time_remaining <= 0:
-                log("[Timer Monitor] Blind timer expired, hiding")
+                logger.debug("[Timer Monitor] Blind timer expired, hiding")
                 with status_lock:
                     status["blindCurrentlyShowing"] = False
                     status["blindShowUntil"] = -1
                 try:
                     _schedule(hide_window)
                 except Exception:
-                    pass
+                    logger.exception("Failed to schedule hide_window from blind timer monitor")
                 time.sleep(1)
             else:
                 time.sleep(min(time_remaining, 1.0))
@@ -3108,7 +3016,7 @@ def blind_timer_monitor_thread():
 
 
 def boat_timer_monitor_thread():
-    log("[System] Boat timer monitor thread started")
+    logger.debug("[System] Boat timer monitor thread started")
     while True:
         with status_lock:
             show_until = status["showUntil"]
@@ -3119,7 +3027,7 @@ def boat_timer_monitor_thread():
             time_remaining = show_until - now
 
             if time_remaining <= 0:
-                log("[Timer Monitor] Boat icon timer expired, hiding")
+                logger.debug("[Timer Monitor] Boat icon timer expired, hiding")
                 with status_lock:
                     status["lastShown"] = None
                     status["showUntil"] = 0
