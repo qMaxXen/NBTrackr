@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import requests
+import sseclient
 import json
 import re
 import signal
@@ -25,20 +26,13 @@ CUSTOMIZATIONS_FILE = os.path.join(CONFIG_DIR, "customizations.json")
 HEADLESS = "--headless" in sys.argv
 LOCK_OVERLAY = "--lock-overlay" in sys.argv
 CLICK_THROUGH = "--click-through" in sys.argv
+DEBUG_MODE_FLAG = "--debug" in sys.argv
 
 position_set = False
 
 # --------------------- Cache --------------------------
 
-_last_custom = None
-_last_boat = None
-_last_stronghold = None
-_last_blind = None
-_last_show_until = 0
-_last_blind_resp = None
-_last_info_resp = None
 _cached_customizations = None
-
 _last_custom_mtime = 0
 _last_overlay_w = 0
 _last_overlay_h = 0
@@ -46,14 +40,28 @@ _window_visible = False
 
 
 def get_customizations():
-    global _cached_customizations
-    if _cached_customizations is not None:
+    global _cached_customizations, _last_custom_mtime
+    try:
+        mtime = os.path.getmtime(CUSTOMIZATIONS_FILE)
+    except Exception as e:
+        log("[Config] Failed to stat customizations file:", e)
+        if _cached_customizations is not None:
+            return _cached_customizations
+        return {}
+
+    if _cached_customizations is not None and mtime == _last_custom_mtime:
         return _cached_customizations
+
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             _cached_customizations = json.load(f)
-    except Exception:
-        _cached_customizations = {}
+        _last_custom_mtime = mtime
+        log("[Config] Customizations reloaded from disk")
+    except Exception as e:
+        log("[Config] Failed to load customizations:", e)
+        if _cached_customizations is None:
+            _cached_customizations = {}
+
     return _cached_customizations
 
 
@@ -61,18 +69,13 @@ def _load_advanced_settings():
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             data = json.load(f)
-        return (
-            bool(data.get("debug_mode", False)),
-            float(data.get("idle_api_polling_rate", 0.3)),
-            float(data.get("max_api_polling_rate", 0.15)),
-        )
+        return bool(data.get("debug_mode", False))
     except Exception:
-        return False, 0.2, 0.05
+        return False
 
+DEBUG_MODE = _load_advanced_settings()
 
-DEBUG_MODE, IDLE_API_POLLING_RATE, MAX_API_POLLING_RATE = _load_advanced_settings()
-
-if DEBUG_MODE:
+if DEBUG_MODE or DEBUG_MODE_FLAG:
     def log(*args):
         timestamp = datetime.now().strftime("[%H:%M:%S]")
         msg = " ".join(map(str, args))
@@ -132,10 +135,6 @@ NB_ROW_SEP = (42, 46, 50, 255)
 
 # --------------------- Generate default pinned image overlay ---------------
 
-_last_default_stronghold = None
-_last_default_boat = None
-_last_default_blind = None
-
 
 def _interpolate_color(c1, c2, steps, step):
     r = int(c1[0] + (c2[0] - c1[0]) * step / max(steps - 1, 1))
@@ -179,7 +178,6 @@ def _nb_blind_eval_color(evaluation):
 
 
 def generate_default_pinned_image():
-    global _last_default_stronghold, _last_default_boat, _last_default_blind
     img = None
 
     with status_lock:
@@ -203,37 +201,33 @@ def generate_default_pinned_image():
     blind_enabled = blind_resp.get("isBlindModeEnabled", False)
     blind_result = blind_resp.get("blindResult", {})
 
-    try:
-        with open(CUSTOMIZATIONS_FILE, "r") as f:
-            custom = json.load(f)
-    except Exception:
-        custom = {}
+    customizations = get_customizations()
 
     try:
-        font_size = int(custom.get("font_size", 18))
+        font_size = int(customizations.get("font_size", 18))
     except Exception:
         font_size = 18
 
-    user_font_path = custom.get("font_name", "")
+    user_font_path = customizations.get("font_name", "")
 
-    show_boat_icon_setting = bool(custom.get("show_boat_icon", True))
-    show_blind_info_setting = bool(custom.get("show_blind_info", True))
+    show_boat_icon_setting = bool(customizations.get("show_boat_icon", True))
+    show_blind_info_setting = bool(customizations.get("show_blind_info", True))
 
     try:
-        neg_coords_enabled = bool(custom.get("negative_coords_color_enabled", False))
+        neg_coords_enabled = bool(customizations.get("negative_coords_color_enabled", False))
         neg_coords_rgb = hex_to_rgb(
-            custom.get("negative_coords_color", "#BA6669"), (186, 102, 105)
+            customizations.get("negative_coords_color", "#BA6669"), (186, 102, 105)
         )
     except Exception:
         neg_coords_enabled = False
         neg_coords_rgb = (186, 102, 105)
 
-    ow_coords_format = custom.get("overworld_coords_format", "four_four")
-    show_adj_count = bool(custom.get("show_angle_adjustment_count", False))
-    auto_hide_window = bool(custom.get("auto_hide_window", True))
+    ow_coords_format = customizations.get("overworld_coords_format", "four_four")
+    show_adj_count = bool(customizations.get("show_angle_adjustment_count", False))
+    auto_hide_window = bool(customizations.get("auto_hide_window", True))
 
-    bg_opacity = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
-    text_opacity = max(0.0, min(1.0, float(custom.get("text_opacity", 1.0))))
+    bg_opacity = max(0.0, min(1.0, float(customizations.get("background_opacity", 1.0))))
+    text_opacity = max(0.0, min(1.0, float(customizations.get("text_opacity", 1.0))))
 
     if not stronghold_resp:
         if not auto_hide_window:
@@ -261,38 +255,6 @@ def generate_default_pinned_image():
         _schedule(clear_overlay_image)
         return
 
-    cache_key = (
-        result_type,
-        boat_state,
-        boat_angle,
-        in_nether,
-        repr(preds[:5]),
-        repr(eye_throws),
-        repr(blind_result),
-        blind_enabled,
-        font_size,
-        neg_coords_enabled,
-        neg_coords_rgb,
-        ow_coords_format,
-        show_adj_count,
-        user_font_path,
-        player_x,
-        player_z,
-        h_ang,
-        bg_opacity,
-        text_opacity,
-        int(show_until * 10) if show_until != float("inf") else sys.maxsize,
-    )
-    if (
-        cache_key == _last_default_stronghold
-        and boat_resp == _last_default_boat
-        and (HEADLESS or _window_visible)
-    ):
-        return
-
-    _last_default_stronghold = cache_key
-    _last_default_boat = boat_resp
-
     info_messages = info_resp.get("informationMessages", [])
 
     if (
@@ -317,8 +279,8 @@ def generate_default_pinned_image():
             return
 
         if not blind_currently_showing:
-            _hide_enabled = bool(custom.get("blind_info_hide_after_enabled", False))
-            _hide_after = float(custom.get("blind_info_hide_after", 20))
+            _hide_enabled = bool(customizations.get("blind_info_hide_after_enabled", False))
+            _hide_after = float(customizations.get("blind_info_hide_after", 20))
             with status_lock:
                 if _hide_enabled:
                     status["blindShowUntil"] = now + _hide_after
@@ -583,7 +545,7 @@ def generate_default_pinned_image():
 
 
 def _save_and_apply(img):
-    tmp = IMAGE_PATH + ".tmp.png"
+    tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
     try:
         img.save(tmp, format="PNG")
         try:
@@ -603,7 +565,7 @@ def _save_and_apply(img):
 def clear_overlay_image():
     try:
         empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-        tmp = IMAGE_PATH + ".tmp.png"
+        tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
         empty.save(tmp, format="PNG")
         try:
             os.replace(tmp, IMAGE_PATH)
@@ -617,12 +579,12 @@ def clear_overlay_image():
     except Exception as e:
         log("clear_overlay_image: Failed:", e)
     if not HEADLESS:
-        custom = get_customizations()
-        if bool(custom.get("auto_hide_window", True)):
+        customizations = get_customizations()
+        if bool(customizations.get("auto_hide_window", True)):
             _schedule(hide_window)
         else:
-            if bool(custom.get("use_custom_pinned_image", False)):
-                _render_and_apply_blank_custom_overlay(custom)
+            if bool(customizations.get("use_custom_pinned_image", False)):
+                _render_and_apply_blank_custom_overlay(customizations)
             else:
                 empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
                 _schedule(lambda im=empty: apply_overlay_from_pil(im))
@@ -1526,41 +1488,19 @@ def _render_nb_failed_standalone(font_size, bg_opacity=1.0, text_opacity=1.0):
 
 
 def generate_custom_pinned_image():
-    global \
-        _last_custom, \
-        _last_boat, \
-        _last_stronghold, \
-        _last_blind, \
-        _last_show_until, \
-        _last_blind_resp, \
-        _last_info_resp
+    customizations = get_customizations()
 
-    global _cached_customizations, _last_custom_mtime
-    try:
-        mtime = os.path.getmtime(CUSTOMIZATIONS_FILE)
-        if _cached_customizations is not None and mtime == _last_custom_mtime:
-            custom = _cached_customizations
-        else:
-            with open(CUSTOMIZATIONS_FILE, "r") as f:
-                custom = json.load(f)
-            _cached_customizations = custom
-            _last_custom_mtime = mtime
-            log("[Config] Customizations reloaded from disk")
-    except Exception as e:
-        log("Failed to read customizations:", e)
-        return
-
-    bg_hex = custom.get("background_color", "#1E1E1E")
-    text_hex = custom.get("text_color", "#000000")
+    bg_hex = customizations.get("background_color", "#1E1E1E")
+    text_hex = customizations.get("text_color", "#000000")
     bg_rgb = hex_to_rgb(bg_hex, fallback=(255, 255, 255))
     text_rgb = hex_to_rgb(text_hex, fallback=(0, 0, 0))
-    bg_opacity = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
-    text_opacity = max(0.0, min(1.0, float(custom.get("text_opacity", 1.0))))
-    text_outline_enabled = bool(custom.get("text_outline_enabled", False))
-    text_outline_color_hex = custom.get("text_outline_color", "#000000")
+    bg_opacity = max(0.0, min(1.0, float(customizations.get("background_opacity", 1.0))))
+    text_opacity = max(0.0, min(1.0, float(customizations.get("text_opacity", 1.0))))
+    text_outline_enabled = bool(customizations.get("text_outline_enabled", False))
+    text_outline_color_hex = customizations.get("text_outline_color", "#000000")
     text_outline_rgb = hex_to_rgb(text_outline_color_hex, (0, 0, 0))
     try:
-        text_outline_width = int(custom.get("text_outline_width", 2))
+        text_outline_width = int(customizations.get("text_outline_width", 2))
         text_outline_width = max(1, min(10, text_outline_width))
     except Exception:
         text_outline_width = 2
@@ -1579,24 +1519,24 @@ def generate_custom_pinned_image():
         stroke_width_kwargs = {
             "stroke_width": text_outline_width,
         }
-    show_boat_icon = custom.get("show_boat_icon", False)
-    show_coords_by_dim = custom.get("show_coords_based_on_dimension", True)
-    show_error_message = custom.get("show_error_message", False)
-    show_blind_info = custom.get("show_blind_info", True)
-    blind_hide_after = custom.get("blind_info_hide_after", 20)
-    blind_hide_after_enabled = custom.get("blind_info_hide_after_enabled", False)
-    font_size = custom.get("font_size", 18)
-    show_adj_count = custom.get("show_angle_adjustment_count", False)
-    ow_coords_format = custom.get("overworld_coords_format", "four_four")
-    neg_coords_enabled = custom.get("negative_coords_color_enabled", False)
-    neg_coords_hex = custom.get("negative_coords_color", "#CC6E72")
+    show_boat_icon = customizations.get("show_boat_icon", False)
+    show_coords_by_dim = customizations.get("show_coords_based_on_dimension", True)
+    show_error_message = customizations.get("show_error_message", False)
+    show_blind_info = customizations.get("show_blind_info", True)
+    blind_hide_after = customizations.get("blind_info_hide_after", 20)
+    blind_hide_after_enabled = customizations.get("blind_info_hide_after_enabled", False)
+    font_size = customizations.get("font_size", 18)
+    show_adj_count = customizations.get("show_angle_adjustment_count", False)
+    ow_coords_format = customizations.get("overworld_coords_format", "four_four")
+    neg_coords_enabled = customizations.get("negative_coords_color_enabled", False)
+    neg_coords_hex = customizations.get("negative_coords_color", "#CC6E72")
     neg_coords_rgb = hex_to_rgb(neg_coords_hex, fallback=(204, 110, 114))
-    portal_nether_enabled = custom.get("portal_nether_color_enabled", True)
-    portal_nether_hex = custom.get("portal_nether_color", "#FFA500")
+    portal_nether_enabled = customizations.get("portal_nether_color_enabled", True)
+    portal_nether_hex = customizations.get("portal_nether_color", "#FFA500")
     portal_nether_rgb = hex_to_rgb(portal_nether_hex, fallback=(255, 165, 0))
-    show_angle_error = custom.get("show_angle_error", False)
-    angle_display_mode = custom.get("angle_display_mode", "angle_and_change")
-    show_overlay_header = custom.get("show_overlay_header", False)
+    show_angle_error = customizations.get("show_angle_error", False)
+    angle_display_mode = customizations.get("angle_display_mode", "angle_and_change")
+    show_overlay_header = customizations.get("show_overlay_header", False)
 
     with status_lock:
         boat_resp = dict(status["boat_resp"])
@@ -1604,26 +1544,6 @@ def generate_custom_pinned_image():
         blind_resp = dict(status["blind_resp"])
         info_resp = dict(status["info_resp"])
         show_until = status.get("showUntil", 0)
-
-    if (
-        custom == _last_custom
-        and boat_resp == _last_boat
-        and stronghold_resp == _last_stronghold
-        and blind_resp == _last_blind_resp
-        and info_resp == _last_info_resp
-        and (HEADLESS or _window_visible)
-        and show_until == _last_show_until
-    ):
-        return
-
-    (
-        _last_custom,
-        _last_boat,
-        _last_stronghold,
-        _last_show_until,
-        _last_blind_resp,
-        _last_info_resp,
-    ) = custom, boat_resp, stronghold_resp, show_until, blind_resp, info_resp
 
     if not stronghold_resp:
         _schedule(clear_overlay_image)
@@ -1662,48 +1582,15 @@ def generate_custom_pinned_image():
             should_hide = True
 
         if should_hide:
-            log("[Render] Hiding blind info (Clearing cache for regeneration)")
+            log("[Render] Hiding blind info")
             with status_lock:
                 status["blindCurrentlyShowing"] = False
-            _last_blind = None
-            _last_custom = None
-            _last_boat = None
-            _last_stronghold = None
 
     if should_show_blind:
         with status_lock:
             blind_show_until = status["blindShowUntil"]
-            blind_currently_showing = status.get("blindCurrentlyShowing", False)
-
-            if blind_show_until > 0 and not blind_currently_showing:
-                if blind_hide_after_enabled:
-                    status["blindShowUntil"] = now + blind_hide_after
-                    blind_show_until = status["blindShowUntil"]
-                else:
-                    status["blindShowUntil"] = float("inf")
-                    blind_show_until = status["blindShowUntil"]
 
         if now < blind_show_until:
-            blind_cache_key = (
-                blind_result.get("evaluation"),
-                blind_result.get("xInNether"),
-                blind_result.get("zInNether"),
-                blind_result.get("highrollProbability"),
-                blind_result.get("highrollThreshold"),
-                blind_result.get("improveDirection"),
-                blind_result.get("improveDistance"),
-                font_size,
-                bg_hex,
-                text_hex,
-                bg_opacity,
-                text_opacity,
-            )
-
-            if blind_currently_showing and blind_cache_key == _last_blind:
-                return
-
-            _last_blind = blind_cache_key
-
             evaluation = blind_result.get("evaluation", "")
             x_nether = blind_result.get("xInNether", 0)
             z_nether = blind_result.get("zInNether", 0)
@@ -1720,7 +1607,7 @@ def generate_custom_pinned_image():
             improve_deg = math.degrees(improve_dir)
             line3 = f"Head {improve_deg:.0f}°, {round(improve_dist)} blocks away, for better coords."
 
-            font_name = custom.get("font_name", "")
+            font_name = customizations.get("font_name", "")
             font = None
             if font_name:
                 try:
@@ -1813,10 +1700,8 @@ def generate_custom_pinned_image():
                 status["blindShowUntil"] = 0
 
     if show_error_message and result_type == "FAILED":
-        _last_custom, _last_boat, _last_stronghold = custom, boat_resp, stronghold_resp
-        _cached_customizations = custom
         text = "Could not determine the stronghold chunk."
-        font_name = custom.get("font_name", "")
+        font_name = customizations.get("font_name", "")
         font = None
         if font_name:
             try:
@@ -1861,8 +1746,8 @@ def generate_custom_pinned_image():
 
     if show_boat_icon and result_type == "NONE":
         if boat_state == "VALID" and boat_angle == 0:
-            if not bool(custom.get("auto_hide_window", True)):
-                _render_and_apply_blank_custom_overlay(custom)
+            if not bool(customizations.get("auto_hide_window", True)):
+                _render_and_apply_blank_custom_overlay(customizations)
             else:
                 _schedule(clear_overlay_image)
             return
@@ -1879,7 +1764,7 @@ def generate_custom_pinned_image():
             except Exception as e:
                 log("[Render] Failed to load/process icon:", e)
             else:
-                tmp = IMAGE_PATH + ".tmp.png"
+                tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
                 try:
                     icon.save(tmp, format="PNG")
                     try:
@@ -1895,8 +1780,8 @@ def generate_custom_pinned_image():
                     log("[Render] Failed to save boat icon:", e)
                 _schedule(lambda im=icon: apply_overlay_from_pil(im, 64, 64))
         else:
-            if not bool(custom.get("auto_hide_window", True)):
-                _render_and_apply_blank_custom_overlay(custom)
+            if not bool(customizations.get("auto_hide_window", True)):
+                _render_and_apply_blank_custom_overlay(customizations)
             else:
                 _schedule(clear_overlay_image)
         return
@@ -1909,10 +1794,10 @@ def generate_custom_pinned_image():
     h_ang = player_pos.get("horizontalAngle")
     in_nether = player_pos.get("isInNether", False)
 
-    shown_count = custom.get("shown_measurements", 5)
-    order = custom.get("text_order", [])
-    enabled = custom.get("text_enabled", {})
-    text_header = custom.get("text_header", {})
+    shown_count = customizations.get("shown_measurements", 5)
+    order = customizations.get("text_order", [])
+    enabled = customizations.get("text_enabled", {})
+    text_header = customizations.get("text_header", {})
     HEADER_LABELS = {
         "distance": "Dist.",
         "certainty_percentage": "%",
@@ -2027,14 +1912,14 @@ def generate_custom_pinned_image():
                     angle_error_overlays.append((f"{error_val:.4f}",))
 
     if not lines:
-        if not bool(custom.get("auto_hide_window", True)):
-            _render_and_apply_blank_custom_overlay(custom)
+        if not bool(customizations.get("auto_hide_window", True)):
+            _render_and_apply_blank_custom_overlay(customizations)
             return
         else:
             _schedule(clear_overlay_image)
             return
 
-    font_name = custom.get("font_name", "")
+    font_name = customizations.get("font_name", "")
     font = None
     if font_name:
         try:
@@ -2456,7 +2341,7 @@ def generate_custom_pinned_image():
                     **stroke_kwargs,
                 )
 
-    tmp = IMAGE_PATH + ".tmp.png"
+    tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
     try:
         img.save(tmp, format="PNG")
         try:
@@ -2663,16 +2548,16 @@ def place_window(width, height):
             pass
 
 
-def _render_and_apply_blank_custom_overlay(custom):
-    bg_hex = custom.get("background_color", "#1E1E1E")
+def _render_and_apply_blank_custom_overlay(customizations):
+    bg_hex = customizations.get("background_color", "#1E1E1E")
     bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
-    bg_opacity = max(0.0, min(1.0, float(custom.get("background_opacity", 1.0))))
+    bg_opacity = max(0.0, min(1.0, float(customizations.get("background_opacity", 1.0))))
 
     blank_img = Image.new(
         "RGBA", (500, 100), (bg_rgb[0], bg_rgb[1], bg_rgb[2], int(bg_opacity * 255))
     )
     try:
-        tmp = IMAGE_PATH + ".tmp.png"
+        tmp = f"{IMAGE_PATH}.{threading.get_ident()}.tmp.png"
         blank_img.save(tmp, format="PNG")
         try:
             os.replace(tmp, IMAGE_PATH)
@@ -2870,8 +2755,6 @@ else:
 _scheduler = _Scheduler() if not HEADLESS else None
 
 
-# --------------------- Status & Thread Setup --------------------------
-
 status_lock = threading.Lock()
 status = {
     "boatState": None,
@@ -2893,211 +2776,308 @@ status = {
 
 USE_CUSTOM_PINNED_IMAGE = load_customizations()
 
-
-def idle_update_frequency():
-    with status_lock:
-        result_type = status["resultType"]
-        blind_showing = status.get("blindCurrentlyShowing", False)
-
-    if result_type == "TRIANGULATION" or (result_type == "BLIND" and blind_showing):
-        return MAX_API_POLLING_RATE
-    return IDLE_API_POLLING_RATE
+_nb_subscriber_connected = threading.Event()
+_nb_subscriber_stop_functions = []
 
 
-def api_polling_thread():
-    log("[System] API polling thread started")
-    _nb_was_connected = False
-    _nb_error_printed = False
+def _sse_try_ping():
+    try:
+        resp = requests.get("http://localhost:52533/api/v1/ping", timeout=0.5)
+        return resp.status_code == 200
+    except Exception:
+        return False
 
-    while True:
+
+def _sse_subscribe(endpoint, on_event, on_disconnect):
+    stop_flag = {"stop": False}
+    resp_holder = {"resp": None}
+
+    def _run():
         try:
-            boat_resp = requests.get(
-                "http://localhost:52533/api/v1/boat", timeout=0.5
-            ).json()
-            stronghold_resp = requests.get(
-                "http://localhost:52533/api/v1/stronghold", timeout=0.5
-            ).json()
-            blind_resp = requests.get(
-                "http://localhost:52533/api/v1/blind", timeout=0.5
-            ).json()
-            info_resp = requests.get(
-                "http://localhost:52533/api/v1/information-messages", timeout=0.5
-            ).json()
-
-            if not _nb_was_connected:
-                print("Connected to Ninjabrain Bot.")
-                log("[Connection] Successfully connected to Ninjabrain Bot API")
-                _nb_was_connected = True
-                _nb_error_printed = False
-
-            boat_state = boat_resp.get("boatState")
-            boat_angle = boat_resp.get("boatAngle", None)
-            result_type = stronghold_resp.get("resultType")
-            player_angle = stronghold_resp.get("playerPosition", {}).get(
-                "horizontalAngle"
-            )
-            is_in_nether = stronghold_resp.get("playerPosition", {}).get(
-                "isInNether", False
-            )
-
-            now = time.time()
-
-            blind_enabled = blind_resp.get("isBlindModeEnabled", False)
-            blind_result = blind_resp.get("blindResult", {})
-
-            with status_lock:
-                _c = get_customizations()
-                prev_state = status["lastShown"]
-                prev_angle = status["lastAngle"]
-                expired = now >= status["showUntil"]
-                prev_blind_result = status["blindResult"]
-                prev_blind_enabled = status["blindModeEnabled"]
-
-                status["boatState"] = boat_state
-                status["boatAngle"] = boat_angle
-                status["resultType"] = result_type
-                status["isInNether"] = is_in_nether
-                status["blindModeEnabled"] = blind_enabled
-                status["boat_resp"] = boat_resp
-                status["stronghold_resp"] = stronghold_resp
-                status["blind_resp"] = blind_resp
-                status["info_resp"] = info_resp
-
-                blind_changed = False
-                has_valid_result = (
-                    blind_result and blind_result.get("evaluation") is not None
-                )
-                prev_had_valid_result = (
-                    prev_blind_result
-                    and prev_blind_result.get("evaluation") is not None
-                )
-
-                if has_valid_result and prev_had_valid_result:
-                    if (
-                        blind_result.get("evaluation")
-                        != prev_blind_result.get("evaluation")
-                        or blind_result.get("xInNether")
-                        != prev_blind_result.get("xInNether")
-                        or blind_result.get("zInNether")
-                        != prev_blind_result.get("zInNether")
-                    ):
-                        blind_changed = True
-                elif has_valid_result and not prev_had_valid_result:
-                    blind_changed = True
-                elif not has_valid_result and prev_had_valid_result:
-                    log("Blind result cleared (no calculations)")
-                    status["blindShowUntil"] = 0
-
-                status["blindResult"] = blind_result if has_valid_result else None
-
-                show_blind_info_setting = bool(_c.get("show_blind_info", True))
-
-                if blind_changed or (
-                    blind_enabled and not prev_blind_enabled and blind_result
-                ):
-                    if not show_blind_info_setting:
-                        status["blindShowUntil"] = 0
-                    else:
-                        _hide_enabled = _c.get("blind_info_hide_after_enabled", False)
-                        _hide_after = _c.get("blind_info_hide_after", 20)
-                        status["blindShowUntil"] = (
-                            (now + _hide_after) if _hide_enabled else float("inf")
-                        )
-
-                if not blind_enabled or result_type == "TRIANGULATION":
-                    if status["blindShowUntil"] > 0:
-                        log("Clearing blind timer: disabled or triangulation mode")
-                    status["blindShowUntil"] = 0
-
-                show_boat_icon_setting = bool(_c.get("show_boat_icon", True))
-                boat_info_hide_after_enabled_setting = bool(
-                    _c.get("boat_info_hide_after_enabled", True)
-                )
-                boat_info_hide_after_setting = float(_c.get("boat_info_hide_after", 10))
-                boat_hide_duration = (
-                    boat_info_hide_after_setting
-                    if boat_info_hide_after_enabled_setting
-                    else float("inf")
-                )
-
-                if result_type in ("NONE", "BLIND") and boat_state in (
-                    "VALID",
-                    "ERROR",
-                ):
-                    if not show_boat_icon_setting:
-                        status["lastShown"] = None
-                        status["showUntil"] = 0
-                        status["lastAngle"] = None
-                    else:
-                        if boat_state == "VALID":
-                            if boat_angle == 0:
-                                status["lastShown"] = None
-                                status["showUntil"] = 0
-                                status["lastAngle"] = None
-                            elif boat_state != prev_state:
-                                status["lastShown"] = boat_state
-                                status["showUntil"] = now + boat_hide_duration
-                                status["lastAngle"] = None
-                            elif expired:
-                                status["showUntil"] = 0
-                        elif boat_state == "ERROR":
-                            if boat_state != prev_state:
-                                status["lastShown"] = boat_state
-                                status["showUntil"] = now + boat_hide_duration
-                                status["lastAngle"] = player_angle
-                            elif expired:
-                                if player_angle != prev_angle:
-                                    status["showUntil"] = now + boat_hide_duration
-                                    status["lastAngle"] = player_angle
-                                else:
-                                    status["showUntil"] = 0
-                else:
-                    status["lastShown"] = None
-                    status["showUntil"] = 0
-                    status["lastAngle"] = None
-
+            resp = requests.get(f"http://localhost:52533/api/v1/{endpoint}/events",stream=True,headers={"Accept": "text/event-stream"},)
+            resp_holder["resp"] = resp
+            resp.raise_for_status()
+            client = sseclient.SSEClient(resp)
+            for event in client.events():
+                if stop_flag["stop"]:
+                    break
+                if not event.data:
+                    continue
+                try:
+                    data = json.loads(event.data)
+                except Exception as e:
+                    log(f"[SSE] Failed to parse {endpoint} event:", e)
+                    continue
+                try:
+                    on_event(data)
+                except Exception as e:
+                    log(f"[SSE] Event on {endpoint}:", e)
         except Exception as e:
-            if _nb_was_connected:
-                print("ERROR: Lost connection to Ninjabrain Bot.")
-                log(f"[Connection] Connection lost: {e}")
-                _nb_was_connected = False
-                _nb_error_printed = False
-            if not _nb_error_printed:
-                print(
-                    "ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced."
-                )
-                log(f"[Connection] Failed to connect: {e}")
-                _nb_error_printed = True
+            if not stop_flag["stop"]:
+                log(f"[SSE] Connection error on {endpoint}:", e)
+        finally:
+            if not stop_flag["stop"]:
+                on_disconnect()
 
-            with status_lock:
-                status.update(
-                    {
-                        "boatState": None,
-                        "boatAngle": None,
-                        "resultType": None,
-                        "isInNether": False,
-                        "lastShown": None,
-                        "showUntil": 0,
-                        "lastAngle": None,
-                        "blindModeEnabled": False,
-                        "blindResult": None,
-                        "blindShowUntil": 0,
-                        "blindCurrentlyShowing": False,
-                        "info_resp": {},
-                    }
-                )
+    sse_thread = threading.Thread(target=_run, daemon=True, name=f"sse-{endpoint}")
+    sse_thread.start()
 
-        time.sleep(MAX_API_POLLING_RATE)
+    def stop():
+        stop_flag["stop"] = True
+        resp = resp_holder["resp"]
+        if resp is not None:
+            try:
+                resp.close()
+            except Exception:
+                pass
+
+    return stop
 
 
-def image_update_thread():
-    log("[System] Image generation thread started")
+def _reset_status_disconnected():
+    with status_lock:
+        status.update(
+            {
+                "boatState": None,
+                "boatAngle": None,
+                "resultType": None,
+                "isInNether": False,
+                "lastShown": None,
+                "showUntil": 0,
+                "lastAngle": None,
+                "blindModeEnabled": False,
+                "blindResult": None,
+                "blindShowUntil": 0,
+                "blindCurrentlyShowing": False,
+                "boat_resp": {},
+                "stronghold_resp": {},
+                "blind_resp": {},
+                "info_resp": {},
+            }
+        )
+
+
+def _handle_nb_disconnect():
+    if _nb_subscriber_connected.is_set():
+        print("ERROR: Lost connection to Ninjabrain Bot.")
+        log("[Connection] Connection lost")
+    _nb_subscriber_connected.clear()
+
+    for stop_function in _nb_subscriber_stop_functions:
+        try:
+            stop_function()
+        except Exception:
+            pass
+    _nb_subscriber_stop_functions.clear()
+
+    _reset_status_disconnected()
+    _schedule(clear_overlay_image)
+
+
+_render_requested = threading.Event()
+_render_lock = threading.Lock()
+
+def _render_worker():
     while True:
-        if USE_CUSTOM_PINNED_IMAGE:
-            generate_custom_pinned_image()
+        _render_requested.wait()
+        time.sleep(0.005)
+        _render_requested.clear()
+        with _render_lock:
+            if USE_CUSTOM_PINNED_IMAGE:
+                generate_custom_pinned_image()
+            else:
+                generate_default_pinned_image()
+
+
+def _trigger_render():
+    _render_requested.set()
+
+
+def _update_boat_visibility(boat_state, boat_angle, result_type, player_angle, customizations, boat_state_changed):
+    prev_state = status["lastShown"]
+    prev_angle = status["lastAngle"]
+    now = time.time()
+    expired = now >= status["showUntil"]
+
+    show_boat_icon_setting = bool(customizations.get("show_boat_icon", True))
+    boat_info_hide_after_enabled_setting = bool(customizations.get("boat_info_hide_after_enabled", True))
+    boat_info_hide_after_setting = float(customizations.get("boat_info_hide_after", 10))
+    boat_hide_duration = (
+        boat_info_hide_after_setting
+        if boat_info_hide_after_enabled_setting
+        else float("inf")
+    )
+
+    if result_type not in ("NONE", "BLIND") or boat_state not in ("VALID", "ERROR"):
+        status["lastShown"] = None
+        status["showUntil"] = 0
+        status["lastAngle"] = None
+        return
+
+    if not show_boat_icon_setting:
+        status["lastShown"] = None
+        status["showUntil"] = 0
+        status["lastAngle"] = None
+        return
+
+    if boat_state == "VALID":
+        if boat_angle == 0:
+            status["lastShown"] = None
+            status["showUntil"] = 0
+            status["lastAngle"] = None
+        elif boat_state_changed and boat_state != prev_state:
+            status["lastShown"] = boat_state
+            status["showUntil"] = now + boat_hide_duration
+            status["lastAngle"] = None
+        elif expired:
+            status["showUntil"] = 0
+    elif boat_state == "ERROR":
+        if boat_state_changed and boat_state != prev_state:
+            status["lastShown"] = boat_state
+            status["showUntil"] = now + boat_hide_duration
+            status["lastAngle"] = player_angle
+        elif expired:
+            if player_angle != prev_angle:
+                status["lastShown"] = boat_state
+                status["showUntil"] = now + boat_hide_duration
+                status["lastAngle"] = player_angle
+            else:
+                status["showUntil"] = 0
+
+def _on_boat_event(boat_resp):
+    with status_lock:
+        customizations = get_customizations()
+        boat_state = boat_resp.get("boatState")
+        boat_angle = boat_resp.get("boatAngle", None)
+        result_type = status["resultType"]
+        player_angle = status.get("stronghold_resp", {}).get("playerPosition", {}).get("horizontalAngle")
+
+        status["boatState"] = boat_state
+        status["boatAngle"] = boat_angle
+        status["boat_resp"] = boat_resp
+
+        _update_boat_visibility(
+            boat_state, boat_angle, result_type, player_angle, customizations,
+            boat_state_changed=True,
+        )
+
+    _trigger_render()
+
+
+def _on_stronghold_event(stronghold_resp):
+    with status_lock:
+        customizations = get_customizations()
+        result_type = stronghold_resp.get("resultType")
+        player_angle = stronghold_resp.get("playerPosition", {}).get("horizontalAngle")
+        is_in_nether = stronghold_resp.get("playerPosition", {}).get("isInNether", False)
+        status["resultType"] = result_type
+        status["isInNether"] = is_in_nether
+        status["stronghold_resp"] = stronghold_resp
+
+        if not status.get("blindModeEnabled") or result_type == "TRIANGULATION":
+            if status["blindShowUntil"] > 0:
+                log("Clearing blind timer")
+            status["blindShowUntil"] = 0
+
+        boat_state = status["boatState"]
+        boat_angle = status["boatAngle"]
+        _update_boat_visibility(
+            boat_state, boat_angle, result_type, player_angle, customizations,
+            boat_state_changed=False,
+        )
+
+    _trigger_render()
+
+
+def _on_blind_event(blind_resp):
+    with status_lock:
+        customizations = get_customizations()
+        now = time.time()
+
+        blind_enabled = blind_resp.get("isBlindModeEnabled", False)
+        blind_result = blind_resp.get("blindResult", {})
+
+        prev_blind_result = status["blindResult"]
+        prev_blind_enabled = status["blindModeEnabled"]
+
+        status["blindModeEnabled"] = blind_enabled
+        status["blind_resp"] = blind_resp
+
+        has_valid_result = blind_result and blind_result.get("evaluation") is not None
+        prev_had_valid_result = prev_blind_result and prev_blind_result.get("evaluation") is not None
+
+        blind_changed = False
+        if has_valid_result and prev_had_valid_result:
+            if (
+                blind_result.get("evaluation") != prev_blind_result.get("evaluation")
+                or blind_result.get("xInNether") != prev_blind_result.get("xInNether")
+                or blind_result.get("zInNether") != prev_blind_result.get("zInNether")
+            ):
+                blind_changed = True
+        elif has_valid_result and not prev_had_valid_result:
+            blind_changed = True
+        elif not has_valid_result and prev_had_valid_result:
+            log("Blind result cleared")
+            status["blindShowUntil"] = 0
+
+        status["blindResult"] = blind_result if has_valid_result else None
+
+        show_blind_info_setting = bool(customizations.get("show_blind_info", True))
+
+        if blind_changed or (blind_enabled and not prev_blind_enabled and blind_result):
+            if not show_blind_info_setting:
+                status["blindShowUntil"] = 0
+            else:
+                _hide_enabled = customizations.get("blind_info_hide_after_enabled", False)
+                _hide_after = customizations.get("blind_info_hide_after", 20)
+                status["blindShowUntil"] = (
+                    (now + _hide_after) if _hide_enabled else float("inf")
+                )
+
+        if not blind_enabled or status["resultType"] == "TRIANGULATION":
+            if status["blindShowUntil"] > 0:
+                log("Clearing blind timer")
+            status["blindShowUntil"] = 0
+
+    _trigger_render()
+
+
+def _on_info_messages_event(info_resp):
+    with status_lock:
+        status["info_resp"] = info_resp
+    _trigger_render()
+
+
+def nb_connection_thread():
+    log("[System] SSE connection started")
+    logged_fail = False
+
+    while True:
+        if _nb_subscriber_connected.is_set():
+            time.sleep(2)
+            continue
+
+        if _sse_try_ping():
+            print("Connected to Ninjabrain Bot.")
+            log("[Connection] Successfully connected to Ninjabrain Bot API")
+            _nb_subscriber_connected.set()
+            logged_fail = False
+
+            stop_functions = [
+                _sse_subscribe("boat", _on_boat_event, _handle_nb_disconnect),
+                _sse_subscribe("stronghold", _on_stronghold_event, _handle_nb_disconnect),
+                _sse_subscribe("blind", _on_blind_event, _handle_nb_disconnect),
+                _sse_subscribe("information-messages", _on_info_messages_event, _handle_nb_disconnect),
+            ]
+            _nb_subscriber_stop_functions.clear()
+            _nb_subscriber_stop_functions.extend(stop_functions)
+
         else:
-            generate_default_pinned_image()
-        time.sleep(idle_update_frequency())
+            if not logged_fail:
+                print("ERROR: Cannot connect to Ninjabrain Bot. Make sure it is running and API is enabled in Ninjabrain Bot > Settings > Advanced.")
+                logged_fail = True
+
+        time.sleep(2)
 
 
 def blind_timer_monitor_thread():
@@ -3127,9 +3107,33 @@ def blind_timer_monitor_thread():
             time.sleep(1)
 
 
-threading.Thread(target=api_polling_thread, daemon=True).start()
-threading.Thread(target=image_update_thread, daemon=True).start()
+def boat_timer_monitor_thread():
+    log("[System] Boat timer monitor thread started")
+    while True:
+        with status_lock:
+            show_until = status["showUntil"]
+            last_shown = status["lastShown"]
+
+        if last_shown is not None and show_until not in (0, float("inf")):
+            now = time.time()
+            time_remaining = show_until - now
+
+            if time_remaining <= 0:
+                log("[Timer Monitor] Boat icon timer expired, hiding")
+                with status_lock:
+                    status["lastShown"] = None
+                    status["showUntil"] = 0
+                _trigger_render()
+                time.sleep(1)
+            else:
+                time.sleep(min(time_remaining, 1.0))
+        else:
+            time.sleep(1)
+
+threading.Thread(target=nb_connection_thread, daemon=True).start()
 threading.Thread(target=blind_timer_monitor_thread, daemon=True).start()
+threading.Thread(target=boat_timer_monitor_thread, daemon=True).start()
+threading.Thread(target=_render_worker, daemon=True).start()
 
 if HEADLESS:
     print("Running in headless mode. Writing overlay to", IMAGE_PATH)

@@ -71,8 +71,6 @@ DEFAULT_CUSTOMIZATIONS = {
         "nether_coords": "Text",
     },
     "debug_mode": False,
-    "idle_api_polling_rate": 0.2,
-    "max_api_polling_rate": 0.05,
     "auto_hide_window": True,
     "hide_method": "withdraw",
     "background_opacity": 1.0,
@@ -2657,48 +2655,6 @@ def main():
         side="left", padx=5
     )
 
-    f_idle = tk.Frame(adv)
-    f_idle.pack(fill="x", pady=(5, 0))
-    tk.Label(f_idle, text="Idle API polling rate (s)", width=26, anchor="w").pack(
-        side="left"
-    )
-    idle_rate_var = tk.DoubleVar(
-        value=custom.get(
-            "idle_api_polling_rate", DEFAULT_CUSTOMIZATIONS["idle_api_polling_rate"]
-        )
-    )
-    idle_rate_entry = tk.Entry(f_idle, textvariable=idle_rate_var, width=8)
-    idle_rate_entry.pack(side="left", padx=5)
-    idle_rate_hint = tk.Label(
-        adv,
-        text="  Default 0.2s. Higher value = lower CPU usage when idle.",
-        anchor="w",
-        fg="#666666",
-        font=("Helvetica", 9, "italic"),
-    )
-    idle_rate_hint.pack(fill="x", pady=(0, 5))
-
-    f_max = tk.Frame(adv)
-    f_max.pack(fill="x", pady=(5, 0))
-    tk.Label(f_max, text="Max API polling rate (s)", width=26, anchor="w").pack(
-        side="left"
-    )
-    max_rate_var = tk.DoubleVar(
-        value=custom.get(
-            "max_api_polling_rate", DEFAULT_CUSTOMIZATIONS["max_api_polling_rate"]
-        )
-    )
-    max_rate_entry = tk.Entry(f_max, textvariable=max_rate_var, width=8)
-    max_rate_entry.pack(side="left", padx=5)
-    max_rate_hint = tk.Label(
-        adv,
-        text="  Default 0.05s. The program will never poll slower than this.",
-        anchor="w",
-        fg="#666666",
-        font=("Helvetica", 9, "italic"),
-    )
-    max_rate_hint.pack(fill="x", pady=(0, 5))
-
     f_hide_method = tk.Frame(adv)
     f_hide_method.pack(fill="x", pady=5)
     tk.Label(f_hide_method, text="Window hide method", width=26, anchor="w").pack(
@@ -2831,8 +2787,6 @@ def main():
         update_blind_hide_after_state()
         update_boat_hide_after_state()
 
-        idle_rate_entry.config(state="normal")
-
     use_var.trace_add("write", update_state)
     update_state()
     update_blind_hide_after_state()
@@ -2849,33 +2803,6 @@ def main():
         if not is_valid_hex(txt_val):
             messagebox.showerror(
                 "Invalid Color", "Text color must be a hex code like #RRGGBB."
-            )
-            return
-
-        try:
-            idle_val = float(idle_rate_var.get())
-            if idle_val <= 0:
-                raise ValueError
-        except (ValueError, tk.TclError):
-            messagebox.showerror(
-                "Invalid Value", "Idle API polling rate must be a positive number."
-            )
-            return
-
-        try:
-            max_val = float(max_rate_var.get())
-            if max_val <= 0:
-                raise ValueError
-        except (ValueError, tk.TclError):
-            messagebox.showerror(
-                "Invalid Value", "Max API polling rate must be a positive number."
-            )
-            return
-
-        if idle_val < max_val:
-            messagebox.showerror(
-                "Invalid Value",
-                "Idle API polling rate should be greater than or equal to Max API polling rate.",
             )
             return
 
@@ -2910,8 +2837,6 @@ def main():
                 "text_enabled": {k: var.get() for k, var in check_vars.items()},
                 "text_header": {k: var.get() for k, var in header_vars.items()},
                 "debug_mode": debug_var.get(),
-                "idle_api_polling_rate": idle_val,
-                "max_api_polling_rate": max_val,
                 "portal_nether_color_enabled": portal_dist_enabled_var.get(),
                 "portal_nether_color": portal_dist_color_var.get().strip(),
                 "auto_hide_window": auto_hide_var.get(),
@@ -2991,8 +2916,6 @@ def main():
             portal_dist_color_var.set(custom.get("portal_nether_color", "#FFA500"))
             _update_portal_dist_state()
             debug_var.set(custom["debug_mode"])
-            idle_rate_var.set(custom["idle_api_polling_rate"])
-            max_rate_var.set(custom["max_api_polling_rate"])
             auto_hide_var.set(custom.get("auto_hide_window", True))
             hide_method_var.set(
                 _HIDE_METHOD_DISPLAY.get(
