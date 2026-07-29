@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NBTrackr
+Comment=Program that displays Ninjabrain Bot's info in an always-on-top window
+Exec=__NBTRACKR_EXEC__
+Terminal=false

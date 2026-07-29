@@ -12,6 +12,7 @@ echo
 
 INSTALL_DIR="$HOME/.local/bin"
 LAUNCHER_LINK="$INSTALL_DIR/nbtrackr"
+DESKTOP_DIR="$HOME/.local/share/applications"
 
 if [ -L "$LAUNCHER_LINK" ]; then
     rm "$LAUNCHER_LINK"
@@ -24,7 +25,17 @@ else
     echo -e "${YELLOW}nbtrackr was not found in $INSTALL_DIR. Nothing to remove.${NC}"
 fi
 
+if [ -f "$DESKTOP_DIR/nbtrackr.desktop" ]; then
+    rm "$DESKTOP_DIR/nbtrackr.desktop"
+    echo -e "${GREEN}Removed nbtrackr.desktop from your application launcher.${NC}"
+fi
+
+if [ -f "$DESKTOP_DIR/nbtrackr-settings.desktop" ]; then
+    rm "$DESKTOP_DIR/nbtrackr-settings.desktop"
+    echo -e "${GREEN}Removed nbtrackr-settings.desktop from your application launcher.${NC}"
+fi
+
 echo
-echo "Note that this only removes the terminal command."
+echo "Note that this only removes the terminal command and .desktop files."
 echo "Neither the NBTrackr folder nor the config files were removed."
-echo "To fully remove NBTrackr, delete the folder manually and remove the folder ~/.config/NBTrackr."
+echo "To fully remove NBTrackr, delete the main NBTrackr folder manually and remove the folder ~/.config/NBTrackr."

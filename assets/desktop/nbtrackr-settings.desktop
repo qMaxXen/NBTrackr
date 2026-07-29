@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=NBTrackr Settings
+Comment=Configure NBTrackr
+Exec=nbtrackr --settings
+Terminal=false

@@ -75,6 +75,7 @@ echo
 INSTALL_DIR="$HOME/.local/bin"
 LAUNCHER_TARGET="$(pwd)/nbtrackr"
 LAUNCHER_LINK="$INSTALL_DIR/nbtrackr"
+DESKTOP_DIR="$HOME/.local/share/applications"
 
 chmod +x "$LAUNCHER_TARGET"
 mkdir -p "$INSTALL_DIR"
@@ -101,11 +102,137 @@ case ":$PATH:" in
 esac
 echo
 
+detect_terminal() {
+    local p=$PPID
+    local name
+    local parent_pid
+
+    for _ in 1 2 3 4 5; do
+        name="$(ps -p "$p" -o comm= 2>/dev/null)"
+        name="${name// /}"
+        case "$name" in
+            *gnome*)
+                echo "gnome-terminal"
+                return
+                ;;
+            *xfce*)
+                echo "xfce4-terminal"
+                return
+                ;;
+            bash|zsh|sh|fish|dash)
+                ;;
+            "")
+                break
+                ;;
+            *)
+                echo "$name"
+                return
+                ;;
+        esac
+        parent_pid="$(ps -p "$p" -o ppid= 2>/dev/null)"
+        parent_pid="${parent_pid// /}"
+        if [ -z "$parent_pid" ] || [ "$parent_pid" -le 1 ]; then
+            break
+        fi
+
+        p="$parent_pid"
+    done
+    echo ""
+}
+
+CURRENT_TERMINAL="$(detect_terminal)"
+
+if [ -n "$CURRENT_TERMINAL" ]; then
+    case "$CURRENT_TERMINAL" in
+        gnome-terminal)
+            TERM_EXEC_FLAG="--"
+            ;;
+        xfce4-terminal)
+            TERM_EXEC_FLAG="-x"
+            ;;
+        *)
+            TERM_EXEC_FLAG="-e"
+            ;;
+    esac
+fi
+
+EXTRA_FLAGS=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --flags)
+            shift
+            EXTRA_FLAGS="$*"
+            break
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+mkdir -p "$DESKTOP_DIR"
+
+NBTRACKR_CMD="nbtrackr"
+if [ -n "$EXTRA_FLAGS" ]; then
+    NBTRACKR_CMD="nbtrackr $EXTRA_FLAGS"
+fi
+
+if [ -n "$CURRENT_TERMINAL" ]; then
+    MAIN_EXEC="$CURRENT_TERMINAL $TERM_EXEC_FLAG $NBTRACKR_CMD"
+    echo "When you launch the program via your application launcher, it will be run with the current terminal you're using: $CURRENT_TERMINAL"
+else
+    MAIN_EXEC="$NBTRACKR_CMD"
+    echo -e "${YELLOW}Warning: could not detect your current terminal. NBTrackr should be run via a terminal.${NC}"
+    echo "The .desktop launcher will run NBTrackr without a terminal window."
+    echo "To fix this, edit ~/.local/share/applications/nbtrackr.desktop"
+    echo "and change Exec= to include your terminal manually, e.g.:"
+    echo -e "  ${CYAN}Exec=kitty -e nbtrackr${NC}"
+    echo
+fi
+
+sed "s|__NBTRACKR_EXEC__|$MAIN_EXEC|g" \
+    assets/desktop/nbtrackr.desktop > "$DESKTOP_DIR/nbtrackr.desktop"
+chmod +x "$DESKTOP_DIR/nbtrackr.desktop"
+
+echo
+echo -e "${GREEN}Added NBTrackr to your application launcher.${NC}"
+if [ -n "$EXTRA_FLAGS" ]; then
+    echo "  (program will use flags: $EXTRA_FLAGS)"
+fi
+echo
+
+echo "Would you like to add NBTrackr Settings to your application launcher?"
+echo "You can also open settings by running \"nbtrackr --settings\" in your terminal."
+read -rp "[y/N] " create_settings_entry
+if [[ "$create_settings_entry" =~ ^[Yy]$ ]]; then
+    cp assets/desktop/nbtrackr-settings.desktop "$DESKTOP_DIR/nbtrackr-settings.desktop"
+    chmod +x "$DESKTOP_DIR/nbtrackr-settings.desktop"
+    echo
+    echo -e "${GREEN}Added NBTrackr Settings to your application launcher.${NC}"
+    echo
+else
+    echo "Skipped."
+    echo
+fi
+
 echo "To run NBTrackr:"
 echo -e "  ${CYAN}nbtrackr${NC}"
 echo
 echo "To configure NBTrackr:"
 echo -e "  ${CYAN}nbtrackr --settings${NC}"
 echo
-echo "To remove NBTrackr from your terminal, run:"
+echo "To uninstall NBTrackr, run:"
 echo -e "  ${CYAN}./uninstall.sh${NC}"
+echo
+echo "To add or change flags used by the program in your application launcher (NOT when you run \"nbtrackr\" in terminal), rerun install.sh"
+echo "with --flags followed by one or more flags in quotes, for example:"
+echo -e "  ${CYAN}./install.sh --flags \"--click-through\"${NC}"
+echo -e "  ${CYAN}./install.sh --flags \"--click-through --lock-overlay\"${NC}"
+echo
+echo "Possible flags:"
+echo -e "  ${CYAN}--headless${NC}       Makes the window not appear (the overlay is always written to /tmp/imgpin-overlay.png)"
+echo -e "  ${CYAN}--lock-overlay${NC}   Locks the overlay in place (window cannot be moved)"
+echo -e "  ${CYAN}--click-through${NC}  Makes the overlay click-through (window cannot be moved)"
+echo -e "  ${CYAN}--debug${NC}          Enable debug logging"
+echo
+echo "You can also edit ~/.local/share/applications/nbtrackr.desktop manually."
