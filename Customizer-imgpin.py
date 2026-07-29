@@ -2138,7 +2138,7 @@ def main():
 
     f1 = tk.Frame(g)
     f1.pack(fill="x", pady=5)
-    tk.Label(f1, text="Use custom pinned image overlay", anchor="w").pack(side="left")
+    tk.Label(f1, text="Use custom overlay", anchor="w").pack(side="left")
     tk.Checkbutton(f1, variable=use_var, relief="flat", bd=0).pack(side="left", padx=5)
 
     f_hide = tk.Frame(g)
