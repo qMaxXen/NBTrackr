@@ -14,7 +14,7 @@ nbtrackr --headless
 
 ## General Overlay Features
 - The overlay will not appear if Ninjabrain Bot has no calculations.
-- The overlay appears on top of your Minecraft window, even over fullscreen applications.
+- The overlay appears on top of your Minecraft window, even when in fullscreen.
 - You can freely move the overlay.
 - The overlay position gets saved and restored.
   - Position data is saved in `~/.config/NBTrackr/settings.json`.
