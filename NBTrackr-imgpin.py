@@ -10,11 +10,22 @@ import time
 
 import requests
 import sseclient
-from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QGuiApplication, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
+from core.qt_render import (
+    apply_opacity,
+    draw_text,
+    draw_text_outlined,
+    fill_rectangle,
+    load_icon,
+    load_qfont,
+    metrics_for,
+    new_canvas,
+    text_height,
+    text_width,
+)
 from core.updater import check_and_update, check_for_update
 from shared.colors import (
     blind_evaluation_color,
@@ -95,8 +106,6 @@ def get_customizations():
 
     return _cached_customizations
 
-ADJ_COUNT_POSITIVE = (117, 204, 108)
-ADJ_COUNT_NEGATIVE = (204, 110, 114)
 
 def _strip_html(text):
     return re.sub(r"<[^>]+>", "", text)
@@ -119,18 +128,19 @@ def _load_nb_font(size, custom_font_path=""):
     global _nb_font_missing_warned
 
     if custom_font_path:
-        try:
-            return ImageFont.truetype(custom_font_path, size)
-        except Exception:
-            logger.exception("Failed to load custom font: %s", custom_font_path)
+        font = load_qfont(size, custom_font_path)
+        if font is not None:
+            return font
+        logger.exception("Failed to load custom font: %s", custom_font_path)
 
     assets_dir = _get_assets_dir()
     font_path = os.path.join(assets_dir, "LiberationSans", "LiberationSans-Bold.ttf")
     if os.path.isfile(font_path):
-        try:
-            return ImageFont.truetype(font_path, size)
-        except Exception:
-            logger.exception("Failed to load bundled font: %s", font_path)
+        font = load_qfont(size, font_path)
+        if font is not None:
+            return font
+        logger.exception("Failed to load bundled font: %s", font_path)
+
     if not _nb_font_missing_warned:
         logger.error(
             "Could not load bundled font at:\n"
@@ -140,8 +150,12 @@ def _load_nb_font(size, custom_font_path=""):
             font_path,
         )
         _nb_font_missing_warned = True
-    return ImageFont.load_default()
+    return load_qfont(size)
 
+# shared overlay colors
+
+ADJ_COUNT_POSITIVE = (117, 204, 108)
+ADJ_COUNT_NEGATIVE = (204, 110, 114)
 
 NB_BG = (55, 60, 66, 255)
 NB_HEADER_BG = (45, 50, 56, 255)
@@ -551,7 +565,8 @@ def generate_default_pinned_image():
 def _write_image_to_path(img, path):
     tmp = f"{path}.{threading.get_ident()}.tmp.png"
     try:
-        img.save(tmp, format="PNG")
+        if not img.save(tmp, "PNG"):
+            raise OSError(f"QImage.save returned False for {tmp}")
     except Exception:
         logger.exception("Failed to save image to tmp file: %s", tmp)
         return
@@ -567,12 +582,12 @@ def _write_image_to_path(img, path):
             logger.exception("Failed to move tmp image file: %s", path)
 
 def _save_and_apply(img):
+    _schedule(lambda im=img: apply_overlay_from_qimage(im))
     _write_image_to_path(img, IMAGE_PATH)
-    _schedule(lambda im=img: apply_overlay_from_pil(im))
 
 
 def clear_overlay_image():
-    empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    empty = new_canvas(1, 1, (0, 0, 0, 0))
     _write_image_to_path(empty, IMAGE_PATH)
     if not HEADLESS:
         customizations = get_customizations()
@@ -582,8 +597,8 @@ def clear_overlay_image():
             if bool(customizations.get("use_custom_pinned_image", False)):
                 _render_and_apply_blank_custom_overlay(customizations)
             else:
-                empty = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-                _schedule(lambda im=empty: apply_overlay_from_pil(im))
+                empty = new_canvas(1, 1, (0, 0, 0, 0))
+                _schedule(lambda im=empty: apply_overlay_from_qimage(im))
 
 
 def _schedule(function):
@@ -594,9 +609,9 @@ def _schedule(function):
 
 
 def _make_draw_surface(w, h):
-    img = Image.new("RGBA", (w, h), NB_ROW_BG)
-    draw = ImageDraw.Draw(img)
-    return img, draw
+    img = new_canvas(w, h, NB_ROW_BG)
+    painter = QPainter(img)
+    return img, painter
 
 
 def _render_nb_stronghold(
@@ -645,12 +660,7 @@ def _render_nb_stronghold(
     _PORTAL_WARN_COLOR = _tc(NB_THROW_HEADER_FG)
 
     def _load_font_for_size(size):
-        if user_font_path:
-            try:
-                return ImageFont.truetype(user_font_path, size)
-            except Exception:
-                logger.exception("Failed to load custom font: %s", user_font_path)
-        return _load_nb_font(size)
+        return _load_nb_font(size, user_font_path)
 
     hdr_font = _load_font_for_size(font_size)
     body_font = _load_font_for_size(font_size)
@@ -660,27 +670,22 @@ def _render_nb_stronghold(
     new_header_font = _load_font_for_size(max(10, int(font_size * 1.05)))
     new_header_ver_font = _load_font_for_size(max(8, int(font_size * 0.85)))
 
-    a_new, d_new = new_header_font.getmetrics()
-    new_header_h = a_new + d_new + 8
+    new_header_h = text_height(new_header_font) + 8
 
-    dummy_img = Image.new("RGBA", (1, 1))
-    dummy_draw = ImageDraw.Draw(dummy_img)
+    def measure_text_width(text, fnt=body_font):
+        return text_width(text, fnt)
 
-    def tw(text, fnt=body_font):
-        return dummy_draw.textbbox((0, 0), text, font=fnt)[2]
-
-    def th(fnt=body_font):
-        a, d = fnt.getmetrics()
-        return a + d
+    def measure_text_height(fnt=body_font):
+        return text_height(fnt)
 
     CELL_PAD_MAIN = 3
     CELL_PAD_THROW = 14
     HDR_SEP = 1
     ROW_SEP = 1
-    body_h = th(body_font) + 4
-    throw_body_h = th(body_font) + 2
-    hdr_h = th(hdr_font) + 4
-    small_h = th(small_font) + 2
+    body_h = measure_text_height(body_font) + 4
+    throw_body_h = measure_text_height(body_font) + 2
+    hdr_h = measure_text_height(hdr_font) + 4
+    small_h = measure_text_height(small_font) + 2
 
     rows = []
     for pred in preds[:5]:
@@ -773,23 +778,23 @@ def _render_nb_stronghold(
     }
     for key in col_keys:
         col_widths[key] = max(
-            tw(hdr_labels[key], hdr_font) + CELL_PAD_MAIN * 2,
-            tw(_rep_samples.get(key, ""), hdr_font) + CELL_PAD_MAIN * 2,
+            measure_text_width(hdr_labels[key], hdr_font) + CELL_PAD_MAIN * 2,
+            measure_text_width(_rep_samples.get(key, ""), hdr_font) + CELL_PAD_MAIN * 2,
         )
 
     for r in rows:
         col_widths["loc"] = max(
-            col_widths["loc"], tw(f"({r['loc'][0]}, {r['loc'][1]})") + CELL_PAD_MAIN * 2
+            col_widths["loc"], measure_text_width(f"({r['loc'][0]}, {r['loc'][1]})") + CELL_PAD_MAIN * 2
         )
         col_widths["cert"] = max(
-            col_widths["cert"], tw(f"{r['cert_pct']:.1f}%") + CELL_PAD_MAIN * 2
+            col_widths["cert"], measure_text_width(f"{r['cert_pct']:.1f}%") + CELL_PAD_MAIN * 2
         )
         col_widths["dist"] = max(
-            col_widths["dist"], tw(str(r["dist"])) + CELL_PAD_MAIN * 2
+            col_widths["dist"], measure_text_width(str(r["dist"])) + CELL_PAD_MAIN * 2
         )
         col_widths["nether"] = max(
             col_widths["nether"],
-            tw(f"({r['nether'][0]}, {r['nether'][1]})") + CELL_PAD_MAIN * 2,
+            measure_text_width(f"({r['nether'][0]}, {r['nether'][1]})") + CELL_PAD_MAIN * 2,
         )
         if show_angle and r["angle"] is not None:
             full_a = r["angle"]
@@ -797,7 +802,7 @@ def _render_nb_stronghold(
                 arrow = "->" if r["dir"] > 0 else "<-"
                 full_a = full_a + f" ({arrow} {abs(r['dir']):.1f})"
             col_widths["angle"] = max(
-                col_widths.get("angle", 0), tw(full_a) + CELL_PAD_MAIN * 2
+                col_widths.get("angle", 0), measure_text_width(full_a) + CELL_PAD_MAIN * 2
             )
 
     throw_headers = ["x", "z", "Angle", "Error"]
@@ -821,10 +826,10 @@ def _render_nb_stronghold(
             )
         )
 
-    throw_nat = [tw(h, small_font) + CELL_PAD_THROW * 2 for h in throw_headers]
+    throw_nat = [measure_text_width(h, small_font) + CELL_PAD_THROW * 2 for h in throw_headers]
     for trow in throw_rows_data:
         for i, cell in enumerate(trow):
-            throw_nat[i] = max(throw_nat[i], tw(cell, small_font) + CELL_PAD_THROW * 2)
+            throw_nat[i] = max(throw_nat[i], measure_text_width(cell, small_font) + CELL_PAD_THROW * 2)
 
     main_table_w = sum(col_widths[k] for k in col_keys)
 
@@ -844,9 +849,9 @@ def _render_nb_stronghold(
         _l3 = f"Head {math.degrees(improve_dir):.0f}°, {round(improve_dist)} blocks away, for better coords."
         min_blind_text_w = (
             max(
-                tw(_prefix) + tw(_eval_text),
-                tw(_l2p) + tw(_l2s),
-                tw(_l3),
+                measure_text_width(_prefix) + measure_text_width(_eval_text),
+                measure_text_width(_l2p) + measure_text_width(_l2s),
+                measure_text_width(_l3),
             )
             + CELL_PAD_MAIN * 2
         )
@@ -856,7 +861,7 @@ def _render_nb_stronghold(
             "",
             "You probably misread one of the eyes.",
         ]
-        min_blind_text_w = max(tw(line) for line in _fl if line) + CELL_PAD_MAIN * 2
+        min_blind_text_w = max(measure_text_width(line) for line in _fl if line) + CELL_PAD_MAIN * 2
 
     rep_loc_sample = f"({12345}, {12345})"
     rep_cert_sample = "100.0%"
@@ -879,16 +884,16 @@ def _render_nb_stronghold(
         else:
             sample = hdr_labels.get(key, "")
         calc_col_w[key] = max(
-            col_widths.get(key, 0), tw(sample, hdr_font) + CELL_PAD_MAIN * 2
+            col_widths.get(key, 0), measure_text_width(sample, hdr_font) + CELL_PAD_MAIN * 2
         )
 
     calc_main_table_w = sum(calc_col_w[k] for k in col_keys)
 
     rep_throw_samples = ["12345.67", "12345.67", "180.0", "0.0000"]
-    calc_throw_nat = [tw(h, small_font) + CELL_PAD_THROW * 2 for h in throw_headers]
+    calc_throw_nat = [measure_text_width(h, small_font) + CELL_PAD_THROW * 2 for h in throw_headers]
     for i, sample in enumerate(rep_throw_samples):
         calc_throw_nat[i] = max(
-            calc_throw_nat[i], tw(sample, small_font) + CELL_PAD_THROW * 2
+            calc_throw_nat[i], measure_text_width(sample, small_font) + CELL_PAD_THROW * 2
         )
 
     img_w = max(
@@ -955,7 +960,7 @@ def _render_nb_stronghold(
             "COMBINED_CERTAINTY",
         )
     ]
-    warn_text_h = th(portal_warn_font)
+    warn_text_h = measure_text_height(portal_warn_font)
     _TWO_LINE_TYPES = (
         "NEXT_THROW_DIRECTION",
         "MISMEASURE",
@@ -988,19 +993,19 @@ def _render_nb_stronghold(
 
     img_h = main_h + throw_h
 
-    img = Image.new("RGBA", (img_w, img_h), _NB_ROW_BG)
-    draw = ImageDraw.Draw(img)
+    img = new_canvas(img_w, img_h, _NB_ROW_BG)
+    painter = QPainter(img)
 
-    draw.rectangle([0, 0, img_w - 1, new_header_h - 1], fill=_NEW_HEADER_BG)
+    fill_rectangle(painter, 0, 0, img_w - 1, new_header_h - 1, _NEW_HEADER_BG)
     nh_text_x = CELL_PAD_MAIN + 4
-    nh_text_y = (new_header_h - th(new_header_font)) // 2
-    draw.text((nh_text_x, nh_text_y), "NBTrackr", font=new_header_font, fill=_NB_TEXT)
-    ver_x = nh_text_x + tw("NBTrackr", new_header_font) + 8
-    a_title, _d_title = new_header_font.getmetrics()
-    a_ver, _d_ver = new_header_ver_font.getmetrics()
-    title_baseline = nh_text_y + a_title
-    ver_y = title_baseline - a_ver
-    draw.text((ver_x, ver_y), APP_VERSION, font=new_header_ver_font, fill=_NEW_HDR_VER_FG)
+    nh_text_y = (new_header_h - measure_text_height(new_header_font)) // 2
+    draw_text(painter, nh_text_x, nh_text_y, "NBTrackr", new_header_font, _NB_TEXT)
+    ver_x = nh_text_x + measure_text_width("NBTrackr", new_header_font) + 8
+    m_title = metrics_for(new_header_font)
+    m_ver = metrics_for(new_header_ver_font)
+    title_baseline = nh_text_y + m_title.ascent()
+    ver_y = title_baseline - m_ver.ascent()
+    draw_text(painter, ver_x, ver_y, APP_VERSION, new_header_ver_font, _NEW_HDR_VER_FG)
 
     _boat_icon_map = {
         "VALID": "boat_green_icon.png",
@@ -1013,14 +1018,13 @@ def _render_nb_stronghold(
         _boat_icon_path = os.path.join(_get_assets_dir(), _boat_icon_file)
         try:
             _icon_size = new_header_h - 8
-            with Image.open(_boat_icon_path) as _bicon:
-                _bicon = _bicon.convert("RGBA").resize(
-                    (_icon_size, _icon_size), Image.Resampling.LANCZOS
-                )
-                _bicon = _apply_img_opacity(_bicon, text_opacity)
+            _boat_icon_image = load_icon(_boat_icon_path, _icon_size)
+            if _boat_icon_image is not None:
+                _boat_icon_image = apply_opacity(_boat_icon_image, text_opacity)
                 _icon_x = img_w - _icon_size - 20
                 _icon_y = (new_header_h - _icon_size) // 2
-                img.alpha_composite(_bicon, (_icon_x, _icon_y))
+                painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                painter.drawImage(_icon_x, _icon_y, _boat_icon_image)
         except Exception:
             logger.exception("Failed to load boat icon: %s", _boat_icon_path)
 
@@ -1029,43 +1033,39 @@ def _render_nb_stronghold(
     top_header_y0 = new_header_bottom
     top_header_y1 = top_header_y0 + hdr_h - 1
     if not (blind_result is not None or failed):
-        draw.rectangle(
-            [0, top_header_y0, img_w - 1, top_header_y0 + HDR_SEP - 1], fill=_NB_HDR_SEP
-        )
-        draw.rectangle(
-            [0, top_header_y0 + HDR_SEP, img_w - 1, top_header_y1 + HDR_SEP],
-            fill=_NB_HEADER_BG,
-        )
+        fill_rectangle(painter, 0, top_header_y0, img_w - 1, top_header_y0 + HDR_SEP - 1, _NB_HDR_SEP)
+        fill_rectangle(painter, 0, top_header_y0 + HDR_SEP, img_w - 1, top_header_y1 + HDR_SEP, _NB_HEADER_BG)
         x = 0
         for key in col_keys:
             cw = col_widths[key]
             lbl = hdr_labels[key]
-            lw = tw(lbl, hdr_font)
+            lw = measure_text_width(lbl, hdr_font)
             if key == "angle" and show_angle:
-                rep_base = tw("000.00", hdr_font)
-                rep_dir = tw(" (-> 000.0)", hdr_font)
+                rep_base = measure_text_width("000.00", hdr_font)
+                rep_dir = measure_text_width(" (-> 000.0)", hdr_font)
                 rep_full = rep_base + rep_dir
                 cell_bx = x + (cw - rep_full) // 2
                 dir_start = cell_bx + rep_base
-                text_x = dir_start + (rep_dir - lw) // 2
-                text_x = max(x, min(text_x, x + cw - lw))
+                text_x_pos = dir_start + (rep_dir - lw) // 2
+                text_x_pos = max(x, min(text_x_pos, x + cw - lw))
             else:
-                text_x = x + (cw - lw) // 2
-            draw.text(
-                (text_x, top_header_y0 + HDR_SEP + (hdr_h - th(hdr_font)) // 2),
+                text_x_pos = x + (cw - lw) // 2
+            draw_text(
+                painter,
+                text_x_pos,
+                top_header_y0 + HDR_SEP + (hdr_h - measure_text_height(hdr_font)) // 2,
                 lbl,
-                font=hdr_font,
-                fill=_NB_TEXT,
+                hdr_font,
+                _NB_TEXT,
             )
             x += cw
-        draw.rectangle(
-            [
-                0,
-                top_header_y1 + HDR_SEP + 1,
-                img_w - 1,
-                top_header_y1 + HDR_SEP + 1 + HDR_SEP - 1,
-            ],
-            fill=_NB_HDR_SEP,
+        fill_rectangle(
+            painter,
+            0,
+            top_header_y1 + HDR_SEP + 1,
+            img_w - 1,
+            top_header_y1 + HDR_SEP + 1 + HDR_SEP - 1,
+            _NB_HDR_SEP,
         )
 
     row_area_y = new_header_bottom + HDR_SEP + hdr_h + HDR_SEP
@@ -1076,19 +1076,16 @@ def _render_nb_stronghold(
         if (not hide_row_dividers and row_idx < num_display_rows - 1) or (
             show_portal_warning and row_idx == num_display_rows - 1
         ):
-            draw.rectangle(
-                [0, y + body_h, img_w - 1, y + body_h + ROW_SEP - 1], fill=_NB_ROW_SEP
-            )
+            fill_rectangle(painter, 0, y + body_h, img_w - 1, y + body_h + ROW_SEP - 1, _NB_ROW_SEP)
 
-        a_body, d_body = body_font.getmetrics()
-        text_y = y + (body_h - (a_body + d_body)) // 2
+        text_y = y + (body_h - measure_text_height(body_font)) // 2
         x = 0
 
         def draw_cell_centered(key, text, fill=_NB_TEXT, fnt=body_font):
             nonlocal x
             cw = col_widths[key]
-            tw_ = dummy_draw.textbbox((0, 0), text, font=fnt)[2]
-            draw.text((x + (cw - tw_) // 2, text_y), text, font=fnt, fill=fill)
+            tw_ = text_width(text, fnt)
+            draw_text(painter, x + (cw - tw_) // 2, text_y, text, fnt, fill)
             x += cw
 
         def draw_coord_cell(key, coord_pair):
@@ -1112,11 +1109,11 @@ def _render_nb_stronghold(
                 ),
                 (")", _NB_TEXT),
             ]
-            full_w = sum(tw(p[0]) for p in parts)
+            full_w = sum(measure_text_width(p[0]) for p in parts)
             bx = x + (cw - full_w) // 2
             for pt, pc in parts:
-                draw.text((bx, text_y), pt, font=body_font, fill=pc)
-                bx += tw(pt)
+                draw_text(painter, bx, text_y, pt, body_font, pc)
+                bx += measure_text_width(pt)
             x += cw
 
         if row_idx >= len(rows):
@@ -1143,15 +1140,17 @@ def _render_nb_stronghold(
                     arrow = "->" if r["dir"] > 0 else "<-"
                     dir_part = f" ({arrow} {abs(r['dir']):.1f})"
                     dir_col = _tc_dyn(gradient_color(abs(r["dir"])))
-                full_w = tw(base_str) + tw(dir_part)
+                full_w = measure_text_width(base_str) + measure_text_width(dir_part)
                 bx = x + (cw - full_w) // 2
-                draw.text((bx, text_y), base_str, font=body_font, fill=_NB_TEXT)
+                draw_text(painter, bx, text_y, base_str, body_font, _NB_TEXT)
                 if dir_part:
-                    draw.text(
-                        (bx + tw(base_str), text_y),
+                    draw_text(
+                        painter,
+                        bx + measure_text_width(base_str),
+                        text_y,
                         dir_part,
-                        font=body_font,
-                        fill=dir_col,
+                        body_font,
+                        dir_col,
                     )
                 x += cw
 
@@ -1202,16 +1201,13 @@ def _render_nb_stronghold(
             return text, None
 
         current_info_y = info_area_start_y
-        draw.rectangle(
-            [0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1],
-            fill=_NB_ROW_SEP,
-        )
+        fill_rectangle(painter, 0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1, _NB_ROW_SEP)
         current_info_y += ROW_SEP
         for msg_idx, msg in enumerate(_display_info_messages):
             severity = msg.get("severity", "WARNING")
             msg_type = msg.get("type", "")
             text = _strip_html(msg.get("message", ""))
-            text_h = th(portal_warn_font)
+            text_h = measure_text_height(portal_warn_font)
             icon_size = int(text_h * 1.1)
             this_msg_h = _info_msg_h(msg)
             row_y = current_info_y
@@ -1222,13 +1218,12 @@ def _render_nb_stronghold(
                 icon_file = "warning_icon.png"
             icon_path = os.path.join(_get_assets_dir(), icon_file)
             try:
-                with Image.open(icon_path) as icon_img:
-                    icon_img = icon_img.convert("RGBA").resize(
-                        (icon_size, icon_size), Image.Resampling.LANCZOS
-                    )
-                    icon_img = _apply_img_opacity(icon_img, text_opacity)
+                icon_img = load_icon(icon_path, icon_size)
+                if icon_img is not None:
+                    icon_img = apply_opacity(icon_img, text_opacity)
                     icon_y = row_y + (this_msg_h - icon_size) // 2
-                    img.alpha_composite(icon_img, (CELL_PAD_MAIN, icon_y))
+                    painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                    painter.drawImage(CELL_PAD_MAIN, icon_y, icon_img)
                 text_start_x = CELL_PAD_MAIN + icon_size + 8
             except Exception:
                 logger.exception("Failed to load info message icon: %s", icon_path)
@@ -1257,143 +1252,78 @@ def _render_nb_stronghold(
                                 )
                                 pct_color = _PORTAL_WARN_COLOR
                             bx = text_start_x
-                            draw.text(
-                                (bx, text_y1),
-                                before,
-                                font=portal_warn_font,
-                                fill=_PORTAL_WARN_COLOR,
-                            )
-                            bx += tw(before, portal_warn_font)
-                            draw.text(
-                                (bx, text_y1),
-                                pct_str,
-                                font=portal_warn_font,
-                                fill=pct_color,
-                            )
-                            bx += tw(pct_str, portal_warn_font)
-                            draw.text(
-                                (bx, text_y1),
-                                after,
-                                font=portal_warn_font,
-                                fill=_PORTAL_WARN_COLOR,
-                            )
+                            draw_text(painter, bx, text_y1, before, portal_warn_font, _PORTAL_WARN_COLOR)
+                            bx += measure_text_width(before, portal_warn_font)
+                            draw_text(painter, bx, text_y1, pct_str, portal_warn_font, pct_color)
+                            bx += measure_text_width(pct_str, portal_warn_font)
+                            draw_text(painter, bx, text_y1, after, portal_warn_font, _PORTAL_WARN_COLOR)
                         else:
-                            draw.text(
-                                (text_start_x, text_y1),
-                                line1,
-                                font=portal_warn_font,
-                                fill=_PORTAL_WARN_COLOR,
-                            )
-                        draw.text(
-                            (text_start_x, text_y2),
-                            line2,
-                            font=portal_warn_font,
-                            fill=_PORTAL_WARN_COLOR,
-                        )
+                            draw_text(painter, text_start_x, text_y1, line1, portal_warn_font, _PORTAL_WARN_COLOR)
+                        draw_text(painter, text_start_x, text_y2, line2, portal_warn_font, _PORTAL_WARN_COLOR)
                     else:
-                        draw.text(
-                            (text_start_x, text_y1),
-                            line1,
-                            font=portal_warn_font,
-                            fill=_PORTAL_WARN_COLOR,
-                        )
-                        draw.text(
-                            (text_start_x, text_y2),
-                            line2,
-                            font=portal_warn_font,
-                            fill=_PORTAL_WARN_COLOR,
-                        )
+                        draw_text(painter, text_start_x, text_y1, line1, portal_warn_font, _PORTAL_WARN_COLOR)
+                        draw_text(painter, text_start_x, text_y2, line2, portal_warn_font, _PORTAL_WARN_COLOR)
                 else:
                     ty = row_y + (this_msg_h - text_h) // 2
-                    draw.text(
-                        (text_start_x, ty),
-                        line1,
-                        font=portal_warn_font,
-                        fill=_PORTAL_WARN_COLOR,
-                    )
+                    draw_text(painter, text_start_x, ty, line1, portal_warn_font, _PORTAL_WARN_COLOR)
             else:
                 ty = row_y + (this_msg_h - text_h) // 2
-                draw.text(
-                    (text_start_x, ty),
-                    text,
-                    font=portal_warn_font,
-                    fill=_PORTAL_WARN_COLOR,
-                )
+                draw_text(painter, text_start_x, ty, text, portal_warn_font, _PORTAL_WARN_COLOR)
 
             current_info_y += this_msg_h
             if msg_idx < len(_display_info_messages) - 1:
-                draw.rectangle(
-                    [0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1],
-                    fill=_NB_ROW_SEP,
-                )
+                fill_rectangle(painter, 0, current_info_y, img_w - 1, current_info_y + ROW_SEP - 1, _NB_ROW_SEP)
                 current_info_y += ROW_SEP
 
     if blind_result is not None:
         eval_color = _tc_dyn(blind_evaluation_color(evaluation))
         txt_x = CELL_PAD_MAIN
-        txt_y = new_header_bottom + (body_h - th(body_font)) // 2
+        txt_y = new_header_bottom + (body_h - measure_text_height(body_font)) // 2
         lsep = body_h
-        draw.text((txt_x, txt_y), _prefix, font=body_font, fill=_NB_TEXT)
-        draw.text(
-            (txt_x + tw(_prefix), txt_y), _eval_text, font=body_font, fill=eval_color
-        )
-        draw.text((txt_x, txt_y + lsep), _l2p, font=body_font, fill=eval_color)
-        draw.text((txt_x + tw(_l2p), txt_y + lsep), _l2s, font=body_font, fill=_NB_TEXT)
-        draw.text((txt_x, txt_y + lsep * 2), _l3, font=body_font, fill=_NB_TEXT)
+        draw_text(painter, txt_x, txt_y, _prefix, body_font, _NB_TEXT)
+        draw_text(painter, txt_x + measure_text_width(_prefix), txt_y, _eval_text, body_font, eval_color)
+        draw_text(painter, txt_x, txt_y + lsep, _l2p, body_font, eval_color)
+        draw_text(painter, txt_x + measure_text_width(_l2p), txt_y + lsep, _l2s, body_font, _NB_TEXT)
+        draw_text(painter, txt_x, txt_y + lsep * 2, _l3, body_font, _NB_TEXT)
     elif failed:
         txt_x = CELL_PAD_MAIN
         for li, line in enumerate(_fl):
             if not line:
                 continue
-            ty = new_header_bottom + li * body_h + (body_h - th(body_font)) // 2
-            draw.text((txt_x, ty), line, font=body_font, fill=_NB_TEXT)
+            ty = new_header_bottom + li * body_h + (body_h - measure_text_height(body_font)) // 2
+            draw_text(painter, txt_x, ty, line, body_font, _NB_TEXT)
 
     if num_throw_rows:
         throw_base_y = main_h
-        draw.rectangle(
-            [0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP - 1], fill=_NB_HDR_SEP
-        )
+        fill_rectangle(painter, 0, throw_base_y, img_w - 1, throw_base_y + HDR_SEP - 1, _NB_HDR_SEP)
         th_title_y = throw_base_y + HDR_SEP
-        draw.rectangle(
-            [0, th_title_y, img_w - 1, th_title_y + hdr_h - 1], fill=_NB_HEADER_BG
-        )
-        title_ty = th_title_y + (hdr_h - th(hdr_font)) // 2
-        draw.text(
-            (CELL_PAD_MAIN + 6, title_ty),
-            "Ender eye throws",
-            font=hdr_font,
-            fill=_NB_TEXT,
-        )
+        fill_rectangle(painter, 0, th_title_y, img_w - 1, th_title_y + hdr_h - 1, _NB_HEADER_BG)
+        title_ty = th_title_y + (hdr_h - measure_text_height(hdr_font)) // 2
+        draw_text(painter, CELL_PAD_MAIN + 6, title_ty, "Ender eye throws", hdr_font, _NB_TEXT)
 
         th_hdr_y = th_title_y + hdr_h
-        draw.rectangle(
-            [0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1], fill=_NB_HEADER_BG
-        )
+        fill_rectangle(painter, 0, th_hdr_y, img_w - 1, th_hdr_y + small_h - 1, _NB_HEADER_BG)
         x = 0
         for i, thdr in enumerate(throw_headers):
             cw = throw_col_widths[i]
-            lw = tw(thdr, small_font)
-            ty = th_hdr_y + (small_h - th(small_font)) // 2
-            draw.text((x + (cw - lw) // 2, ty), thdr, font=small_font, fill=_NB_TEXT)
+            lw = measure_text_width(thdr, small_font)
+            ty = th_hdr_y + (small_h - measure_text_height(small_font)) // 2
+            draw_text(painter, x + (cw - lw) // 2, ty, thdr, small_font, _NB_TEXT)
             x += cw
 
         sep2_y = th_hdr_y + small_h
-        draw.rectangle([0, sep2_y, img_w - 1, sep2_y + HDR_SEP - 1], fill=_NB_HDR_SEP)
+        fill_rectangle(painter, 0, sep2_y, img_w - 1, sep2_y + HDR_SEP - 1, _NB_HDR_SEP)
 
         for ti in range(num_throw_rows):
             ty = sep2_y + HDR_SEP + ti * (throw_body_h + ROW_SEP)
             if ti < num_throw_rows - 1:
-                draw.rectangle(
-                    [0, ty + throw_body_h, img_w - 1, ty + throw_body_h + ROW_SEP - 1],
-                    fill=_NB_ROW_SEP,
-                )
+                fill_rectangle(painter, 0, ty + throw_body_h, img_w - 1, ty + throw_body_h + ROW_SEP - 1, _NB_ROW_SEP)
             x = 0
             if ti < len(throw_rows_data):
                 trow = throw_rows_data[ti]
                 for i, cell in enumerate(trow):
                     cw = throw_col_widths[i]
-                    a_small, _ = small_font.getmetrics()
-                    ty2 = ty + (throw_body_h - a_small) // 2
+                    ty2 = ty + (throw_body_h - measure_text_height(small_font)) // 2
                     if failed and i == 3:
                         x += cw
                         continue
@@ -1405,40 +1335,21 @@ def _render_nb_stronghold(
                                 if (cnt_raw is None or cnt_raw >= 0)
                                 else ADJ_COUNT_NEGATIVE
                             )
-                            full_w = tw(aw_str, small_font) + tw(cnt_str, small_font)
+                            full_w = measure_text_width(aw_str, small_font) + measure_text_width(cnt_str, small_font)
                             bx = x + (cw - full_w) // 2
-                            draw.text(
-                                (bx, ty2),
-                                aw_str,
-                                font=small_font,
-                                fill=_NB_THROW_HDR_FG,
-                            )
-                            draw.text(
-                                (bx + tw(aw_str, small_font), ty2),
-                                cnt_str,
-                                font=small_font,
-                                fill=adj_col,
-                            )
+                            draw_text(painter, bx, ty2, aw_str, small_font, _NB_THROW_HDR_FG)
+                            draw_text(painter, bx + measure_text_width(aw_str, small_font), ty2, cnt_str, small_font, adj_col)
                         else:
-                            cw_ = tw(aw_str, small_font)
-                            draw.text(
-                                (x + (cw - cw_) // 2, ty2),
-                                aw_str,
-                                font=small_font,
-                                fill=_NB_THROW_HDR_FG,
-                            )
+                            cw_ = measure_text_width(aw_str, small_font)
+                            draw_text(painter, x + (cw - cw_) // 2, ty2, aw_str, small_font, _NB_THROW_HDR_FG)
                     else:
-                        cw_ = tw(cell, small_font)
-                        draw.text(
-                            (x + (cw - cw_) // 2, ty2),
-                            cell,
-                            font=small_font,
-                            fill=_NB_THROW_HDR_FG,
-                        )
+                        cw_ = measure_text_width(cell, small_font)
+                        draw_text(painter, x + (cw - cw_) // 2, ty2, cell, small_font, _NB_THROW_HDR_FG)
                     x += cw
             else:
                 for cw in throw_col_widths:
                     x += cw
+    painter.end()
     return img
 
 
@@ -1448,30 +1359,23 @@ def certainty_color_for_turn(abs_turn):
 
 def _render_nb_failed_standalone(font_size, bg_opacity=1.0, text_opacity=1.0):
     font = _load_nb_font(font_size)
-    a, d = font.getmetrics()
-    body_h = a + d + 10
-    dummy_img = Image.new("RGBA", (1, 1))
-    dummy_draw = ImageDraw.Draw(dummy_img)
+    body_h = text_height(font) + 10
     lines = [
         "Could not determine the stronghold chunk.",
         "You probably misread one of the eyes.",
     ]
-    max_w = max(dummy_draw.textbbox((0, 0), line, font=font)[2] for line in lines)
+    max_w = max(text_width(line, font) for line in lines)
     PAD = 20
     img_w = max_w + PAD * 2
     img_h = body_h * len(lines) + PAD
-    img = Image.new("RGBA", (img_w, img_h), with_alpha(NB_ROW_BG[:3], bg_opacity))
-    draw = ImageDraw.Draw(img)
+    img = new_canvas(img_w, img_h, with_alpha(NB_ROW_BG[:3], bg_opacity))
+    painter = QPainter(img)
     t_col = with_alpha(NB_TEXT, text_opacity)
     for i, line in enumerate(lines):
         y = PAD // 2 + i * body_h
-        lw = dummy_draw.textbbox((0, 0), line, font=font)[2]
-        draw.text(
-            ((img_w - lw) // 2, y + (body_h - (a + d)) // 2),
-            line,
-            font=font,
-            fill=t_col,
-        )
+        lw = text_width(line, font)
+        draw_text(painter, (img_w - lw) // 2, y + (body_h - text_height(font)) // 2, line, font, t_col)
+    painter.end()
     return img
 
 
@@ -1500,16 +1404,12 @@ def generate_custom_pinned_image():
     text_rgba = with_alpha(text_rgb, text_opacity)
     outline_rgba = with_alpha(text_outline_rgb, text_opacity)
 
-    stroke_kwargs = {}
-    stroke_width_kwargs = {}
-    if text_outline_enabled:
-        stroke_kwargs = {
-            "stroke_width": text_outline_width,
-            "stroke_fill": outline_rgba,
-        }
-        stroke_width_kwargs = {
-            "stroke_width": text_outline_width,
-        }
+    def _draw_text_with_optional_outline(x, y, text, fnt, fill):
+        if text_outline_enabled:
+            draw_text_outlined(painter, x, y, text, fnt, fill, outline_rgba, text_outline_width)
+        else:
+            draw_text(painter, x, y, text, fnt, fill)
+
     show_boat_icon = customizations.get("show_boat_icon", False)
     show_coords_by_dim = customizations.get("show_coords_based_on_dimension", True)
     show_error_message = customizations.get("show_error_message", False)
@@ -1592,59 +1492,33 @@ def generate_custom_pinned_image():
             font_name = customizations.get("font_name", "")
             font = _load_nb_font(font_size, font_name)
 
-            dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-            w_line1_pre = dummy.textbbox(
-                (0, 0), line1_pre, font=font, **stroke_width_kwargs
-            )[2]
-            w_line1_eval = dummy.textbbox(
-                (0, 0), line1_eval, font=font, **stroke_width_kwargs
-            )[2]
-            w_line2_pct = dummy.textbbox(
-                (0, 0), highroll_pct_text, font=font, **stroke_width_kwargs
-            )[2]
-            w_line2_post = dummy.textbbox(
-                (0, 0), line2_post, font=font, **stroke_width_kwargs
-            )[2]
-            w_line3 = dummy.textbbox((0, 0), line3, font=font, **stroke_width_kwargs)[2]
+            w_line1_pre = text_width(line1_pre, font)
+            w_line1_eval = text_width(line1_eval, font)
+            w_line2_pct = text_width(highroll_pct_text, font)
+            w_line2_post = text_width(line2_post, font)
+            w_line3 = text_width(line3, font)
             max_w = max(w_line1_pre + w_line1_eval, w_line2_pct + w_line2_post, w_line3)
 
-            ascent, descent = font.getmetrics()
-            line_h = ascent + descent + 6
+            line_h = text_height(font) + 6
             height = line_h * 3 + 20
             pad = 10
 
-            img = Image.new("RGBA", (int(max_w + 2 * pad), height), bg_rgba)
-            draw = ImageDraw.Draw(img)
+            img = new_canvas(int(max_w + 2 * pad), height, bg_rgba)
+            painter = QPainter(img)
             eval_color_rgba = with_alpha(blind_evaluation_color(evaluation), text_opacity)
 
             x, y = pad, 10
-            draw.text((x, y), line1_pre, font=font, fill=text_rgba, **stroke_kwargs)
-            draw.text(
-                (x + w_line1_pre, y),
-                line1_eval,
-                font=font,
-                fill=eval_color_rgba,
-                **stroke_kwargs,
-            )
+            _draw_text_with_optional_outline(x, y, line1_pre, font, text_rgba)
+            _draw_text_with_optional_outline(x + w_line1_pre, y, line1_eval, font, eval_color_rgba)
             x = pad
             y += line_h
-            draw.text(
-                (x, y),
-                highroll_pct_text,
-                font=font,
-                fill=eval_color_rgba,
-                **stroke_kwargs,
-            )
-            draw.text(
-                (x + w_line2_pct, y),
-                line2_post,
-                font=font,
-                fill=text_rgba,
-                **stroke_kwargs,
-            )
+            _draw_text_with_optional_outline(x, y, highroll_pct_text, font, eval_color_rgba)
+            _draw_text_with_optional_outline(x + w_line2_pct, y, line2_post, font, text_rgba)
             y += line_h
-            draw.text((pad, y), line3, font=font, fill=text_rgba, **stroke_kwargs)
+            _draw_text_with_optional_outline(pad, y, line3, font, text_rgba)
+            painter.end()
 
+            _schedule(lambda im=img: apply_overlay_from_qimage(im))
             _write_image_to_path(img, IMAGE_PATH)
             logger.debug(
                 "[Render] Saved blind overlay image (Expires: %.2f)",
@@ -1653,8 +1527,6 @@ def generate_custom_pinned_image():
 
             with status_lock:
                 status["blindCurrentlyShowing"] = True
-
-            _schedule(lambda im=img: apply_overlay_from_pil(im))
             return
 
     if result_type == "TRIANGULATION":
@@ -1668,24 +1540,15 @@ def generate_custom_pinned_image():
         font_name = customizations.get("font_name", "")
         font = _load_nb_font(font_size, font_name)
 
-        dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        bbox = dummy.textbbox((0, 0), text, font=font, **stroke_kwargs)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-        offset_x = bbox[0]
-        offset_y = bbox[1]
+        text_w = text_width(text, font)
+        text_h = text_height(font)
         pad = 10
-        img = Image.new("RGBA", (text_w + 2 * pad, text_h + 2 * pad), bg_rgba)
-        draw = ImageDraw.Draw(img)
-        draw.text(
-            (pad - offset_x, pad - offset_y),
-            text,
-            font=font,
-            fill=text_rgba,
-            **stroke_kwargs,
-        )
+        img = new_canvas(text_w + 2 * pad, text_h + 2 * pad, bg_rgba)
+        painter = QPainter(img)
+        _draw_text_with_optional_outline(pad, pad, text, font, text_rgba)
+        painter.end()
+        _schedule(lambda im=img: apply_overlay_from_qimage(im))
         _write_image_to_path(img, IMAGE_PATH)
-        _schedule(lambda im=img: apply_overlay_from_pil(im))
         return
 
     with status_lock:
@@ -1706,14 +1569,17 @@ def generate_custom_pinned_image():
             )
             icon_path = os.path.join(os.path.dirname(__file__), "assets", icon_file)
             try:
-                icon = Image.open(icon_path).convert("RGBA")
-                icon = icon.resize((64, 64), Image.LANCZOS)
-                icon = _apply_img_opacity(icon, text_opacity)
+                icon = load_icon(icon_path, 64)
+                if icon is not None:
+                    icon = apply_opacity(icon, text_opacity)
             except Exception:
-                logger.exception("[Render] Failed to load/process icon")
+                logger.exception("[Render] Failed to load icon")
             else:
-                _write_image_to_path(icon, IMAGE_PATH)
-                _schedule(lambda im=icon: apply_overlay_from_pil(im, 64, 64))
+                if icon is not None:
+                    _schedule(lambda im=icon: apply_overlay_from_qimage(im, 64, 64))
+                    _write_image_to_path(icon, IMAGE_PATH)
+                else:
+                    logger.error("[Render] Failed to load boat icon: %s", icon_path)
         else:
             if not bool(customizations.get("auto_hide_window", True)):
                 _render_and_apply_blank_custom_overlay(customizations)
@@ -1857,8 +1723,7 @@ def generate_custom_pinned_image():
     font_name = customizations.get("font_name", "")
     font = _load_nb_font(font_size, font_name)
 
-    ascent, descent = font.getmetrics()
-    line_h = ascent + descent + 6
+    line_h = text_height(font) + 6
 
     has_header = any(
         text_header.get(k, "Text") == "Text" for k in order if enabled.get(k, True)
@@ -1869,8 +1734,7 @@ def generate_custom_pinned_image():
     small_font_size = max(8, int(font_size * 0.90))
     small_font = _load_nb_font(small_font_size, font_name)
 
-    small_ascent, small_descent = small_font.getmetrics()
-    small_line_h = small_ascent + small_descent + 4
+    small_line_h = text_height(small_font) + 4
 
     overlay_header_h_calc = (
         small_line_h if (show_overlay_header and n_bottom_rows > 0) else 0
@@ -1882,30 +1746,21 @@ def generate_custom_pinned_image():
     )
     height = header_h + line_h * len(lines) + 10 + bottom_extra_h
 
-    dummy = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-
     def _item_display_width(kind, val):
         if kind == "distance":
             txt = val[0] if isinstance(val, tuple) else str(val)
         elif kind in ("coords", "nether_coords_val"):
             cx_v, cz_v = val
             parts = ["(", str(cx_v), ", ", str(cz_v), ")"]
-            total = sum(
-                dummy.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2]
-                for p in parts
-            )
+            total = sum(text_width(p, font) for p in parts)
             return total + 14, f"({cx_v}, {cz_v})"
         elif kind == "angle_change":
             arrow, num = val
             full_change = f"({arrow} {num})"
-            return dummy.textbbox(
-                (0, 0), full_change, font=font, **stroke_width_kwargs
-            )[2] + 14, full_change
+            return text_width(full_change, font) + 14, full_change
         else:
             txt = str(val)
-        return dummy.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[
-            2
-        ] + 14, txt
+        return text_width(txt, font) + 14, txt
 
     col_widths = []
     for parts, _plink in lines:
@@ -1917,8 +1772,8 @@ def generate_custom_pinned_image():
                 col_widths[slot_idx] = max(col_widths[slot_idx], w)
 
     required_w = 10 + sum(col_widths) + 10
-    img = Image.new("RGBA", (int(required_w + 10), height), bg_rgba)
-    draw = ImageDraw.Draw(img)
+    img = new_canvas(int(required_w + 10), height, bg_rgba)
+    painter = QPainter(img)
 
     col_x = []
     cx_acc = 10
@@ -1957,7 +1812,7 @@ def generate_custom_pinned_image():
             hdr_txt = HEADER_LABELS.get(key, "")
             if not hdr_txt:
                 continue
-            tw_val = draw.textbbox((0, 0), hdr_txt, font=font, **stroke_width_kwargs)[2]
+            tw_val = text_width(hdr_txt, font)
             if key == "angle" and angle_display_mode in ("angle_and_change",):
                 change_slot = slots[-1]
                 if change_slot < len(col_x) and change_slot < len(col_widths):
@@ -1968,7 +1823,7 @@ def generate_custom_pinned_image():
                 span_start = col_x[first_slot]
                 span_end = col_x[last_slot] + col_widths[last_slot]
                 hx = span_start + (span_end - span_start - tw_val) // 2
-            draw.text((hx, 5), hdr_txt, font=font, fill=text_rgba, **stroke_kwargs)
+            _draw_text_with_optional_outline(hx, 5, hdr_txt, font, text_rgba)
 
     for row, (parts, _portal_link) in enumerate(lines):
         y = 5 + header_h + row * line_h
@@ -1990,7 +1845,7 @@ def generate_custom_pinned_image():
             col_w = col_widths[slot_idx] if slot_idx < len(col_widths) else 0
 
             def _cx(txt):
-                tw_v = draw.textbbox((0, 0), txt, font=font, **stroke_width_kwargs)[2]
+                tw_v = text_width(txt, font)
                 return col_left + (col_w - tw_v) // 2
 
             if kind == "certainty":
@@ -2003,7 +1858,7 @@ def generate_custom_pinned_image():
                         "Failed to parse certainty percentage for color: %r", txt
                     )
                     fill = text_rgba
-                draw.text((_cx(txt), y), txt, font=font, fill=fill, **stroke_kwargs)
+                _draw_text_with_optional_outline(_cx(txt), y, txt, font, fill)
 
             elif kind == "angle_change":
                 arrow, num = val
@@ -2015,22 +1870,12 @@ def generate_custom_pinned_image():
                     )
                 fill = with_alpha(gradient_color(_last_turn_pct[0]), text_opacity)
                 full_change = f"({arrow} {num})"
-                cw_ = draw.textbbox(
-                    (0, 0), full_change, font=font, **stroke_width_kwargs
-                )[2]
-                draw.text(
-                    (col_left + (col_w - cw_) // 2, y),
-                    full_change,
-                    font=font,
-                    fill=fill,
-                    **stroke_kwargs,
-                )
+                cw_ = text_width(full_change, font)
+                _draw_text_with_optional_outline(col_left + (col_w - cw_) // 2, y, full_change, font, fill)
 
             elif kind == "distance":
                 txt = val[0] if isinstance(val, tuple) else str(val)
-                draw.text(
-                    (_cx(txt), y), txt, font=font, fill=text_rgba, **stroke_kwargs
-                )
+                _draw_text_with_optional_outline(_cx(txt), y, txt, font, text_rgba)
 
             elif kind == "coords":
                 cx_v, cz_v = val
@@ -2053,18 +1898,11 @@ def generate_custom_pinned_image():
                     (z_str, z_fill),
                     (")", text_rgba),
                 ]
-                _coord_total_w = sum(
-                    draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2]
-                    for p, _ in _coord_parts
-                )
+                _coord_total_w = sum(text_width(p, font) for p, _ in _coord_parts)
                 bx = col_left + (col_w - _coord_total_w) // 2
                 for part_txt, part_fill in _coord_parts:
-                    draw.text(
-                        (bx, y), part_txt, font=font, fill=part_fill, **stroke_kwargs
-                    )
-                    bx += draw.textbbox(
-                        (0, 0), part_txt, font=font, **stroke_width_kwargs
-                    )[2]
+                    _draw_text_with_optional_outline(bx, y, part_txt, font, part_fill)
+                    bx += text_width(part_txt, font)
 
             elif kind == "nether_coords_val":
                 cx_v, cz_v = val
@@ -2101,24 +1939,15 @@ def generate_custom_pinned_image():
                     (z_str, z_fill),
                     (")", punct_fill),
                 ]
-                _nether_total_w = sum(
-                    draw.textbbox((0, 0), p, font=font, **stroke_width_kwargs)[2]
-                    for p, _ in _nether_parts
-                )
+                _nether_total_w = sum(text_width(p, font) for p, _ in _nether_parts)
                 bx = col_left + (col_w - _nether_total_w) // 2
                 for part_txt, part_fill in _nether_parts:
-                    draw.text(
-                        (bx, y), part_txt, font=font, fill=part_fill, **stroke_kwargs
-                    )
-                    bx += draw.textbbox(
-                        (0, 0), part_txt, font=font, **stroke_width_kwargs
-                    )[2]
+                    _draw_text_with_optional_outline(bx, y, part_txt, font, part_fill)
+                    bx += text_width(part_txt, font)
 
             else:
                 txt = str(val)
-                draw.text(
-                    (_cx(txt), y), txt, font=font, fill=text_rgba, **stroke_kwargs
-                )
+                _draw_text_with_optional_outline(_cx(txt), y, txt, font, text_rgba)
 
     actual_left = actual_right = None
     for parts, _plink_last in lines[-1:]:
@@ -2135,8 +1964,8 @@ def generate_custom_pinned_image():
                 txt = f"({cx_v}, {cz_v})"
             elif kind == "angle_change":
                 arrow, num = val
-                arrow_w = draw.textbbox((0, 0), arrow, font=font)[2]
-                total_w = arrow_w + 4 + draw.textbbox((0, 0), num, font=font)[2]
+                arrow_w = text_width(arrow, font)
+                total_w = arrow_w + 4 + text_width(num, font)
                 cs = c_left + (c_w - total_w) // 2
                 ce = cs + total_w
                 actual_left = cs if actual_left is None else min(actual_left, cs)
@@ -2144,7 +1973,7 @@ def generate_custom_pinned_image():
                 continue
             else:
                 txt = str(val)
-            txt_w = draw.textbbox((0, 0), txt, font=font)[2]
+            txt_w = text_width(txt, font)
             cs = c_left + (c_w - txt_w) // 2
             ce = cs + txt_w
             actual_left = cs if actual_left is None else min(actual_left, cs)
@@ -2164,13 +1993,9 @@ def generate_custom_pinned_image():
             row_y = base_y + overlay_header_h + oi * (small_line_h - 2) - 2
             if oi < len(adj_count_overlays):
                 angle_txt, count_txt, adj_raw = adj_count_overlays[oi]
-                angle_w = draw.textbbox(
-                    (0, 0), angle_txt, font=small_font, **stroke_width_kwargs
-                )[2]
+                angle_w = text_width(angle_txt, small_font)
                 count_w = (
-                    draw.textbbox(
-                        (0, 0), count_txt, font=small_font, **stroke_width_kwargs
-                    )[2]
+                    text_width(count_txt, small_font)
                     if count_txt
                     else 0
                 )
@@ -2183,13 +2008,7 @@ def generate_custom_pinned_image():
                 if oi == 0:
                     first_adj_x = adj_x
                     first_adj_total_w = total_w
-                draw.text(
-                    (adj_x, row_y),
-                    angle_txt,
-                    font=small_font,
-                    fill=text_rgba,
-                    **stroke_kwargs,
-                )
+                _draw_text_with_optional_outline(adj_x, row_y, angle_txt, small_font, text_rgba)
                 if count_txt:
                     base_color = (
                         ADJ_COUNT_POSITIVE
@@ -2197,18 +2016,10 @@ def generate_custom_pinned_image():
                         else ADJ_COUNT_NEGATIVE
                     )
                     adj_fill = with_alpha(base_color, text_opacity)
-                    draw.text(
-                        (adj_x + angle_w, row_y),
-                        count_txt,
-                        font=small_font,
-                        fill=adj_fill,
-                        **stroke_kwargs,
-                    )
+                    _draw_text_with_optional_outline(adj_x + angle_w, row_y, count_txt, small_font, adj_fill)
             if oi < len(angle_error_overlays):
                 err_txt = angle_error_overlays[oi][0]
-                err_txt_w = draw.textbbox(
-                    (0, 0), err_txt, font=small_font, **stroke_width_kwargs
-                )[2]
+                err_txt_w = text_width(err_txt, small_font)
                 err_x = (
                     actual_left
                     if oi == 0
@@ -2217,13 +2028,7 @@ def generate_custom_pinned_image():
                 if oi == 0:
                     first_err_x = err_x
                     first_err_w = err_txt_w
-                draw.text(
-                    (err_x, row_y),
-                    err_txt,
-                    font=small_font,
-                    fill=text_rgba,
-                    **stroke_kwargs,
-                )
+                _draw_text_with_optional_outline(err_x, row_y, err_txt, small_font, text_rgba)
 
         if show_overlay_header and n_overlay_rows > 0:
             hdr_y = base_y - 2
@@ -2232,35 +2037,20 @@ def generate_custom_pinned_image():
                 and first_err_x is not None
                 and first_err_w is not None
             ):
-                w_e = draw.textbbox(
-                    (0, 0), "Error", font=small_font, **stroke_width_kwargs
-                )[2]
-                draw.text(
-                    (first_err_x + (first_err_w - w_e) // 2, hdr_y),
-                    "Error",
-                    font=small_font,
-                    fill=text_rgba,
-                    **stroke_kwargs,
-                )
+                w_e = text_width("Error", small_font)
+                _draw_text_with_optional_outline(first_err_x + (first_err_w - w_e) // 2, hdr_y, "Error", small_font, text_rgba)
             if (
                 adj_count_overlays
                 and first_adj_x is not None
                 and first_adj_total_w is not None
             ):
-                w_a = draw.textbbox(
-                    (0, 0), "Angle", font=small_font, **stroke_width_kwargs
-                )[2]
-                draw.text(
-                    (first_adj_x + (first_adj_total_w - w_a) // 2, hdr_y),
-                    "Angle",
-                    font=small_font,
-                    fill=text_rgba,
-                    **stroke_kwargs,
-                )
+                w_a = text_width("Angle", small_font)
+                _draw_text_with_optional_outline(first_adj_x + (first_adj_total_w - w_a) // 2, hdr_y, "Angle", small_font, text_rgba)
 
+    painter.end()
+
+    _schedule(lambda im=img: apply_overlay_from_qimage(im))
     _write_image_to_path(img, IMAGE_PATH)
-
-    _schedule(lambda im=img: apply_overlay_from_pil(im))
 
 
 # --------------------- END Generate custom pinned image overlay ----------------------
@@ -2373,23 +2163,6 @@ class OverlayWindow(QWidget):
 # ---------------------- Helpers ----------------------
 
 
-def pil_to_qpixmap(pil_img):
-    if pil_img.mode != "RGBA":
-        pil_img = pil_img.convert("RGBA")
-    data = pil_img.tobytes("raw", "RGBA")
-    qimage = QImage(
-        data, pil_img.width, pil_img.height, pil_img.width * 4, QImage.Format_RGBA8888
-    )
-    return QPixmap.fromImage(qimage)
-
-
-def _apply_img_opacity(img, op):
-    if op >= 1.0:
-        return img
-    img = img.convert("RGBA")
-    _a = img.split()[-1].point(lambda i: int(i * op))
-    img.putalpha(_a)
-    return img
 
 
 def show_window():
@@ -2462,24 +2235,23 @@ def _render_and_apply_blank_custom_overlay(customizations):
     bg_rgb = hex_to_rgb(bg_hex, (255, 255, 255))
     bg_opacity = max(0.0, min(1.0, float(customizations.get("background_opacity", 1.0))))
 
-    blank_img = Image.new("RGBA", (500, 100), with_alpha(bg_rgb, bg_opacity))
+    blank_img = new_canvas(500, 100, with_alpha(bg_rgb, bg_opacity))
+    _schedule(lambda im=blank_img: apply_overlay_from_qimage(im))
     _write_image_to_path(blank_img, IMAGE_PATH)
 
-    _schedule(lambda im=blank_img: apply_overlay_from_pil(im))
 
-
-def apply_overlay_from_pil(pil_img, width=None, height=None):
+def apply_overlay_from_qimage(qimg, width=None, height=None):
     if HEADLESS:
-        w = int(width) if width is not None else pil_img.width
-        h = int(height) if height is not None else pil_img.height
+        w = int(width) if width is not None else qimg.width()
+        h = int(height) if height is not None else qimg.height()
         logger.debug("[System] Headless mode: overlay written (%sx%spx)", w, h)
         return
     try:
-        qpixmap = pil_to_qpixmap(pil_img)
+        qpixmap = QPixmap.fromImage(qimg)
         label.setPixmap(qpixmap)
 
-        w = int(width) if width is not None else pil_img.width
-        h = int(height) if height is not None else pil_img.height
+        w = int(width) if width is not None else qimg.width()
+        h = int(height) if height is not None else qimg.height()
 
         global _last_overlay_w, _last_overlay_h
         if w > 100:
@@ -2612,7 +2384,8 @@ GREEN_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_green.png")
 RED_IMG = os.path.join(os.path.dirname(__file__), "assets/boat_red.png")
 
 if HEADLESS:
-    app = None
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    app = QGuiApplication(sys.argv)
     window = None
     label = None
     _scheduler = None
