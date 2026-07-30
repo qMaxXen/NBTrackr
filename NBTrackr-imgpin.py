@@ -85,6 +85,11 @@ def get_customizations():
     global _cached_customizations, _last_custom_mtime
     try:
         mtime = os.path.getmtime(CUSTOMIZATIONS_FILE)
+    except FileNotFoundError:
+        logger.debug("[Config] Customizations file not found, using defaults")
+        _cached_customizations = {}
+        _last_custom_mtime = 0
+        return _cached_customizations
     except Exception:
         logger.exception("[Config] Failed to check customizations file modification time")
         if _cached_customizations is not None:
@@ -2067,6 +2072,9 @@ def get_window_hiding_method():
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             data = json.load(f)
         _window_hiding_method = data.get("hide_method", "withdraw")
+    except FileNotFoundError:
+        logger.debug("[Window] Customizations file not found, using default hide method")
+        _window_hiding_method = "withdraw"
     except Exception:
         logger.exception("[Window] Failed to read window hiding method")
         _window_hiding_method = "withdraw"
