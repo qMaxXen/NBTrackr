@@ -2819,7 +2819,7 @@ threading.Thread(target=boat_timer_monitor_thread, daemon=True).start()
 threading.Thread(target=_render_worker, daemon=True).start()
 
 if HEADLESS:
-    print("Running in headless mode. Writing overlay to", IMAGE_PATH)
+    print("Running in headless mode. The overlay is always written to", IMAGE_PATH)
     try:
         while True:
             time.sleep(1)
