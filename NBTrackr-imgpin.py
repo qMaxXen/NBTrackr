@@ -250,7 +250,7 @@ def generate_default_pinned_image():
 
     if not stronghold_resp:
         if not auto_hide_window:
-            img = _render_nb_stronghold(
+            img = _render_default_overlay_image(
                 [],
                 [],
                 None,
@@ -309,7 +309,7 @@ def generate_default_pinned_image():
                 current_blind_show_until = status["blindShowUntil"]
 
         if current_blind_show_until == float("inf") or now < current_blind_show_until:
-            img = _render_nb_stronghold(
+            img = _render_default_overlay_image(
                 preds,
                 eye_throws,
                 player_x,
@@ -339,7 +339,7 @@ def generate_default_pinned_image():
                 status["blindShowUntil"] = -1
 
             if not auto_hide_window:
-                img = _render_nb_stronghold(
+                img = _render_default_overlay_image(
                     preds,
                     eye_throws,
                     player_x,
@@ -378,7 +378,7 @@ def generate_default_pinned_image():
                 status["blindShowUntil"] = 0
 
     if result_type == "FAILED":
-        img = _render_nb_stronghold(
+        img = _render_default_overlay_image(
             preds,
             eye_throws,
             player_x,
@@ -414,7 +414,7 @@ def generate_default_pinned_image():
             show_until = status["showUntil"]
         if now < show_until:
             if boat_state == "ERROR":
-                img = _render_nb_stronghold(
+                img = _render_default_overlay_image(
                     [],
                     [],
                     None,
@@ -437,7 +437,7 @@ def generate_default_pinned_image():
                 else:
                     _schedule(clear_overlay_image)
             elif boat_state == "VALID" and boat_angle is not None and boat_angle != 0:
-                img = _render_nb_stronghold(
+                img = _render_default_overlay_image(
                     [],
                     [],
                     None,
@@ -461,7 +461,7 @@ def generate_default_pinned_image():
                     _schedule(clear_overlay_image)
             else:
                 if not auto_hide_window:
-                    img = _render_nb_stronghold(
+                    img = _render_default_overlay_image(
                         [],
                         [],
                         None,
@@ -485,7 +485,7 @@ def generate_default_pinned_image():
                 _schedule(clear_overlay_image)
         else:
             if not auto_hide_window:
-                img = _render_nb_stronghold(
+                img = _render_default_overlay_image(
                     [],
                     [],
                     None,
@@ -513,7 +513,7 @@ def generate_default_pinned_image():
         if (result_type in ("TRIANGULATION", "BLIND") and preds) or (
             result_type == "FAILED"
         ):
-            img = _render_nb_stronghold(
+            img = _render_default_overlay_image(
                 preds,
                 eye_throws,
                 player_x,
@@ -535,7 +535,7 @@ def generate_default_pinned_image():
 
     if img is None:
         if not auto_hide_window:
-            img = _render_nb_stronghold(
+            img = _render_default_overlay_image(
                 preds,
                 eye_throws,
                 player_x,
@@ -614,7 +614,7 @@ def _make_draw_surface(w, h):
     return img, painter
 
 
-def _render_nb_stronghold(
+def _render_default_overlay_image(
     preds,
     eye_throws,
     player_x,
