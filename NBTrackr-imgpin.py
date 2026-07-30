@@ -9,7 +9,7 @@ import threading
 import time
 
 import requests
-import sseclient
+import sseclient # needs "sseclient-py" package, not "sseclient"
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QGuiApplication, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
