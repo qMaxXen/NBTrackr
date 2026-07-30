@@ -1919,7 +1919,7 @@ def _collect_blind_settings(vars_dict: dict) -> dict:
 
 def open_default_preview(vars_dict: dict):
     win = tk.Toplevel()
-    win.title("Default Overlay — Preview")
+    win.title("Default Overlay")
     win.resizable(False, False)
 
     lbl = tk.Label(win, bd=0, highlightthickness=0)
@@ -1957,7 +1957,7 @@ def open_default_preview(vars_dict: dict):
 
 def open_eye_preview(vars_dict: dict):
     win = tk.Toplevel()
-    win.title("Eye Throws Overlay Preview")
+    win.title("Custom overlay")
     win.resizable(False, False)
 
     lbl = tk.Label(win, bd=0, highlightthickness=0)
@@ -1995,7 +1995,7 @@ def open_eye_preview(vars_dict: dict):
 
 def open_default_blind_preview(vars_dict: dict = None):
     win = tk.Toplevel()
-    win.title("Default Blind Coords Overlay Preview")
+    win.title("Default blind coords overlay")
     win.resizable(False, False)
 
     lbl = tk.Label(win, bd=0, highlightthickness=0)
@@ -2033,7 +2033,7 @@ def open_default_blind_preview(vars_dict: dict = None):
 
 def open_blind_preview(vars_dict: dict):
     win = tk.Toplevel()
-    win.title("Blind Coords Overlay — Preview")
+    win.title("Custom blind coords overlay")
     win.resizable(False, False)
 
     lbl = tk.Label(win, bd=0, highlightthickness=0)
