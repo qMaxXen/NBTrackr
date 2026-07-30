@@ -37,7 +37,7 @@ from shared.colors import (
 )
 
 # Program Version
-APP_VERSION = "v2.6.0"
+APP_VERSION = "v2.7.0"
 
 CONFIG_DIR = os.path.expanduser("~/.config/NBTrackr")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
