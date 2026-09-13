@@ -15,6 +15,7 @@ from shared.colors import (
     gradient_color,
     hex_to_rgb,
 )
+from shared.default_customizations import DEFAULT_CUSTOMIZATIONS
 
 CUSTOM_PATH = os.path.expanduser("~/.config/NBTrackr/customizations.json")
 BUNDLED_FONT_DISPLAY = "LiberationSans-Bold (Bundled)"
@@ -24,66 +25,6 @@ BUNDLED_FONT_PATH = os.path.join(
     "LiberationSans",
     "LiberationSans-Bold.ttf",
 )
-
-DEFAULT_CUSTOMIZATIONS = {
-    "use_custom_pinned_image": False,
-    "shown_measurements": 5,
-    "overworld_coords_format": "four_four",
-    "angle_display_mode": "angle_and_change",
-    "show_angle_adjustment_count": True,
-    "show_angle_error": True,
-    "show_overlay_header": True,
-    "show_coords_based_on_dimension": False,
-    "show_boat_icon": True,
-    "show_error_message": True,
-    "boat_info_hide_after": 10,
-    "boat_info_hide_after_enabled": True,
-    "show_blind_info": True,
-    "blind_info_hide_after": 20,
-    "blind_info_hide_after_enabled": False,
-    "font_name": os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "assets",
-        "LiberationSans",
-        "LiberationSans-Bold.ttf",
-    ),
-    "font_size": 18,
-    "background_color": "#1E1E1E",
-    "text_color": "#FFFFFF",
-    "text_outline_enabled": False,
-    "text_outline_color": "#000000",
-    "text_outline_width": 2,
-    "negative_coords_color_enabled": True,
-    "negative_coords_color": "#BA6669",
-    "portal_nether_color_enabled": True,
-    "portal_nether_color": "#FFA500",
-    "text_order": [
-        "overworld_coords",
-        "certainty_percentage",
-        "distance",
-        "nether_coords",
-        "angle",
-    ],
-    "text_enabled": {
-        "distance": True,
-        "certainty_percentage": True,
-        "angle": True,
-        "overworld_coords": True,
-        "nether_coords": True,
-    },
-    "text_header": {
-        "distance": "Text",
-        "certainty_percentage": "Text",
-        "angle": "Text",
-        "overworld_coords": "Text",
-        "nether_coords": "Text",
-    },
-    "debug_mode": False,
-    "auto_hide_window": True,
-    "hide_method": "withdraw",
-    "background_opacity": 1.0,
-    "text_opacity": 1.0,
-}
 
 DISPLAY_NAMES = {
     "distance": "Distance",

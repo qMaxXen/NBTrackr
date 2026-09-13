@@ -9,7 +9,7 @@ import threading
 import time
 
 import requests
-import sseclient # needs "sseclient-py" package, not "sseclient"
+import sseclient  # needs "sseclient-py" package, not "sseclient"
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QGuiApplication, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
@@ -35,6 +35,7 @@ from shared.colors import (
     hex_to_rgb,
     with_alpha,
 )
+from shared.default_customizations import DEFAULT_CUSTOMIZATIONS
 
 # Program Version
 APP_VERSION = "v2.7.0"
@@ -87,27 +88,43 @@ def get_customizations():
         mtime = os.path.getmtime(CUSTOMIZATIONS_FILE)
     except FileNotFoundError:
         logger.debug("[Config] Customizations file not found, using defaults")
-        _cached_customizations = {}
+        _cached_customizations = DEFAULT_CUSTOMIZATIONS.copy()
         _last_custom_mtime = 0
         return _cached_customizations
     except Exception:
         logger.exception("[Config] Failed to check customizations file modification time")
         if _cached_customizations is not None:
             return _cached_customizations
-        return {}
+        return DEFAULT_CUSTOMIZATIONS.copy()
 
     if _cached_customizations is not None and mtime == _last_custom_mtime:
         return _cached_customizations
 
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
-            _cached_customizations = json.load(f)
+            loaded = json.load(f)
+
+        _filled_settings = []
+        for default_setting, default_val in DEFAULT_CUSTOMIZATIONS.items():
+            if default_setting not in loaded:
+                loaded[default_setting] = default_val
+                _filled_settings.append(default_setting)
+            elif isinstance(default_val, dict) and isinstance(loaded.get(default_setting), dict):
+                for nested_setting, nested_val in default_val.items():
+                    if nested_setting not in loaded[default_setting]:
+                        loaded[default_setting][nested_setting] = nested_val
+                        _filled_settings.append(f"{default_setting}.{nested_setting}")
+
+        if _filled_settings:
+            logger.debug("[Config] Filled in missing customization setting(s) from default: %s", ", ".join(_filled_settings))
+
+        _cached_customizations = loaded
         _last_custom_mtime = mtime
         logger.debug("[Config] Customizations reloaded from disk")
     except Exception:
         logger.exception("[Config] Failed to load customizations")
         if _cached_customizations is None:
-            _cached_customizations = {}
+            _cached_customizations = DEFAULT_CUSTOMIZATIONS.copy()
 
     return _cached_customizations
 
