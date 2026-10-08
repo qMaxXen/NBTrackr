@@ -57,7 +57,7 @@ _last_overlay_w = 0
 _last_overlay_h = 0
 _window_visible = False
 
-def _load_advanced_settings():
+def _get_debug_mode():
     try:
         with open(CUSTOMIZATIONS_FILE, "r") as f:
             data = json.load(f)
@@ -65,7 +65,7 @@ def _load_advanced_settings():
     except (FileNotFoundError, json.JSONDecodeError, PermissionError):
         return False
 
-DEBUG_MODE = _load_advanced_settings()
+DEBUG_MODE = _get_debug_mode()
 
 if DEBUG_MODE or DEBUG_MODE_FLAG:
     logging.basicConfig(

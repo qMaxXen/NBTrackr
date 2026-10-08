@@ -2,5 +2,7 @@
 Type=Application
 Name=NBTrackr
 Comment=Program that displays Ninjabrain Bot's info in an always-on-top window
-Exec=__NBTRACKR_EXEC__
+# Change "kitty -e" to your preferred terminal. Keep in mind that some terminals do not use -e to launch an application
+# You can add the supported flags after "nbtrackr" (e.g. "kitty -e nbtrackr --click-through --debug")
+Exec=kitty -e nbtrackr
 Terminal=false
